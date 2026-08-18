@@ -97,7 +97,7 @@ const EmploymentApplicationForm = ({ publicMode = false }) => {
     }
     setSubmitting(true);
     try {
-      const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+      const API = `${(window.location.origin.includes('localhost') ? process.env.REACT_APP_BACKEND_URL : window.location.origin)}/api`;
       const res = await axios.post(`${API}/employment-applications/public/submit`, v);
       setSubmitted({ submission_no: res.data.submission_no });
       localStorage.removeItem(STORAGE_KEY);

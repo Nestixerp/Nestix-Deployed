@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { CheckCircle2 } from 'lucide-react';
 
-const API = process.env.REACT_APP_BACKEND_URL;
+import API from '../lib/backendUrl';
 
 export default function PublicRFQ() {
   const { token } = useParams();

@@ -12,7 +12,8 @@ import {
   Edit
 } from 'lucide-react';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+import API_BACKEND from '../lib/backendUrl';
+const BACKEND_URL = API_BACKEND;
 
 const EfficiencyReports = () => {
   const [loading, setLoading] = useState(true);

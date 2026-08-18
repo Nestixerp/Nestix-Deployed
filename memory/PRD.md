@@ -1026,3 +1026,6 @@ Purpose: migrate production data when the user redeploys under a new subdomain (
   - UI: file picker for restore, Replace/Merge radios, compact per-collection summaries, updated migration instructions.
 - Files: backend/routes/data_migration_routes.py, frontend/src/pages/DataMigration.js.
 - Platform context: user wants to rename deployed URL (pressbrake-quotes.emergent.host) — support said rename project → new deployment (50cr) → migrate data → shut old down; renaming steps escalated to support@emergent.sh.
+
+### Bug fix (Aug 2026): Login broken on custom domain (ultimate-360.com) — RESOLVED ✅
+Cause: frontend baked REACT_APP_BACKEND_URL (pressbrake-quotes.emergent.host) at build time; browsing via the custom domain made API calls cross-origin → login failed. Fix: new /app/frontend/src/lib/backendUrl.js resolves backend URL at RUNTIME — uses window.location.origin unless on localhost (dev). Updated services/api.js + 7 pages that used the env var directly (EmploymentApplicationForm, CustomerSatisfactionPublicSurvey, RecycledMetal, CalibrationSchedule, EfficiencyReports, PublicRFQ, ElectricityUsage, CalibrationRecord). App now works on ANY domain. Verified login on localhost dev branch. USER MUST REDEPLOY.

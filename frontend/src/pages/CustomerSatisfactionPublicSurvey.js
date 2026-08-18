@@ -7,7 +7,8 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { CheckCircle2, AlertCircle, Send } from 'lucide-react';
 
-const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import BACKEND_URL from '../lib/backendUrl';
+const API_BASE = `${BACKEND_URL}/api`;
 
 const RATING_QUESTIONS = [
   { key: 'q_overall_quality', section: 'Service Experience', label: '1. How satisfied are you with the overall quality of laser cutting service you received from Ultimate Laser?', options: ['Very Unsatisfied', 'Unsatisfied', 'Neutral', 'Satisfied', 'Very Satisfied'] },

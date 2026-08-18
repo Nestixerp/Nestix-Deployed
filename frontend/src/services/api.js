@@ -1,6 +1,6 @@
 import axios from 'axios';
+import BACKEND_URL from '../lib/backendUrl';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API_BASE = `${BACKEND_URL}/api`;
 
 // Get token from localStorage
