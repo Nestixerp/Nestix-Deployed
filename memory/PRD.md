@@ -1006,3 +1006,13 @@ User need: generate job sheets for chosen line items only (partial orders / diff
 - Dialog already had per-line checkboxes + qty/price overrides; added: Select All / Clear All buttons, fetch of existing job sheets on open (/job-sheets/quote/{id}), amber "Already released: JS-XXXX" badge per line, and auto-preselection of ONLY items without existing job sheets.
 - Workflow for different PO numbers: release each batch separately entering that batch's PO.
 - File: frontend/src/pages/Quotes.js (handleOpenMultiItemJobSheetDialog + dialog UI). Verified E2E: released line 1 only → reopen → badge shown, line 1 unticked, line 2 preselected. Needs redeploy.
+
+## Material RFQ Module (Aug 2026) — COMPLETE ✅ (tested: iteration_26.json 90% + main-agent fixes verified)
+User need: send material pricing enquiries to suppliers WITHOUT email integration — public link like customer surveys.
+- Internal page /rfqs (SALES → Material RFQs): create enquiry (title, notes, required-by, material items: description/material/size/qty), auto RFQ-XXXX numbering, copy public supplier link, view supplier responses side by side, Open/Close/reopen, delete.
+- Public page /rfq/{token} (no auth): shows company branding + items; supplier MUST enter company name; per item: price (ea ex GST), "Size not available" flag, optional alternative size + price (amber panel), notes; thank-you screen; closed enquiries show closed message.
+- Backend routes/rfq_routes.py: auth CRUD + public GET/respond (validates company name + item ids). Collections: rfqs, rfq_responses.
+- Fixes after testing: mounted Sonner Toaster globally in App.js (RFQs/Policies/IMSManual toasts now visible), clipboard writeText wrapped with prompt() fallback.
+
+### Policy editor/PDF compression (Aug 2026) — DONE ✅
+Body Calibri 11pt, line-height 1.2, p margin 3pt (editor + PDF); H1 16pt / H2 13pt; Heading dropdown added to Quill toolbar. Conflict Minerals PDF: 2 pages, compact. (User's 6-page LPG policy will compress on production after redeploy.)

@@ -3,6 +3,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { Toaster } from "./components/ui/toaster";
+import { Toaster as SonnerToaster } from "./components/ui/sonner";
 import Login from "./components/auth/Login";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
@@ -57,6 +58,8 @@ import AssetRegisters from "./pages/AssetRegisters";
 import AuditDashboard from "./pages/AuditDashboard";
 import IMSManual from "./pages/IMSManual";
 import Policies from "./pages/Policies";
+import RFQs from "./pages/RFQs";
+import PublicRFQ from "./pages/PublicRFQ";
 import MenuConfig from "./pages/MenuConfig";
 import NCRRegister from "./pages/NCRRegister";
 import NCRForm from "./pages/NCRForm";
@@ -120,6 +123,8 @@ function App() {
           <Route path="/quality/audit-dashboard" element={<DashboardLayout><AuditDashboard /></DashboardLayout>} />
           <Route path="/ims/manual" element={<DashboardLayout><IMSManual /></DashboardLayout>} />
           <Route path="/quality/policies" element={<DashboardLayout><Policies /></DashboardLayout>} />
+          <Route path="/rfqs" element={<DashboardLayout><RFQs /></DashboardLayout>} />
+          <Route path="/rfq/:token" element={<PublicRFQ />} />
           <Route path="/settings/menu" element={<DashboardLayout><MenuConfig /></DashboardLayout>} />
           <Route path="/quality/ncr" element={<DashboardLayout><NCRRegister /></DashboardLayout>} />
           <Route path="/quality/ncr/new" element={<DashboardLayout><NCRForm /></DashboardLayout>} />
@@ -181,6 +186,7 @@ function App() {
         </Routes>
       </BrowserRouter>
       <Toaster />
+      <SonnerToaster position="top-right" richColors />
     </AuthProvider>
   );
 }

@@ -41,6 +41,7 @@ export const MODULES = {
   customers: { label: 'Customers', path: '/customers', icon: Users, help: 'Customer register.' },
   suppliers: { label: 'Suppliers', path: '/suppliers', icon: Truck, help: 'Approved supplier register.' },
   purchase_orders: { label: 'Purchase Orders', path: '/purchase-orders', icon: ShoppingCart, help: 'Purchasing and supplier orders.' },
+  rfqs: { label: 'Material RFQs', path: '/rfqs', icon: ClipboardList, alwaysShow: true, help: 'Send material pricing enquiries to suppliers via a public link — suppliers enter prices and alternative sizes online.' },
   // Production
   job_sheets: { label: 'Job Sheets', path: '/jobsheets', icon: ClipboardList, help: 'Production job sheets.' },
   shop_floor: { label: 'Shop Floor Entry', path: '/shop-floor', icon: Clock, alwaysShow: true, help: 'Shop floor time and job entry.' },
@@ -97,7 +98,7 @@ export const DEFAULT_SECTIONS = [
     'audit_schedule', 'audit_templates', 'management_review', 'document_control',
     'policies', 'forms_library', 'risk_opportunities', 'ncr_register', 'supplier_reviews',
     'customer_satisfaction'] },
-  { id: 'sales', label: 'SALES', items: ['quotes', 'part_history', 'invoices', 'customers', 'suppliers', 'purchase_orders'] },
+  { id: 'sales', label: 'SALES', items: ['quotes', 'part_history', 'invoices', 'customers', 'suppliers', 'purchase_orders', 'rfqs'] },
   { id: 'production', label: 'PRODUCTION', items: ['job_sheets', 'shop_floor', 'production_dashboard', 'overdue_jobs', 'scheduling', 'time_clock', 'efficiency', 'packing_slips', 'inventory'] },
   { id: 'safety', label: 'SAFETY', items: [
     'jsa', 'plant_hazard_checks', 'near_miss', 'injury_register', 'injury_graph',

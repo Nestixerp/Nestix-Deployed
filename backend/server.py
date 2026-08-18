@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 # Import routes
-from routes import auth_routes, quote_routes, material_routes, purchase_order_routes, supplier_routes, customer_routes, customer_contact_routes, dashboard_routes, job_sheet_routes, file_upload_routes, packing_slip_routes, invoice_routes, employee_routes, settings_routes, machine_routes, working_hours_routes, job_schedule_routes, audit_routes, efficiency_routes, calibration_routes, environmental_routes, customer_financial_routes, email_routes, seed_routes, shop_floor_routes, production_dashboard_routes, notification_routes, data_migration_routes, jsa_routes, drawing_analysis_routes, part_history_routes, legal_requirements_routes, supplier_review_routes, environmental_risk_routes, msds_routes, evacuation_routes, training_matrix_routes, document_control_routes, customer_satisfaction_routes, iso_modules_routes, employment_applications_routes, injury_register_routes, management_review_routes, outstanding_actions_routes, ohs_meetings_routes, housekeeping_audits_routes, injury_graph_routes, audit_schedule_routes, ncr_routes, compliance_registers_routes, plant_hazard_checks_routes, near_miss_routes, training_appraisal_routes, leave_of_absence_routes, risk_opportunities_routes, courier_kpi_routes, standards_library_routes, audit_templates_routes, asset_registers_routes, menu_config_routes, ims_manual_routes, policies_routes
+from routes import auth_routes, quote_routes, material_routes, purchase_order_routes, supplier_routes, customer_routes, customer_contact_routes, dashboard_routes, job_sheet_routes, file_upload_routes, packing_slip_routes, invoice_routes, employee_routes, settings_routes, machine_routes, working_hours_routes, job_schedule_routes, audit_routes, efficiency_routes, calibration_routes, environmental_routes, customer_financial_routes, email_routes, seed_routes, shop_floor_routes, production_dashboard_routes, notification_routes, data_migration_routes, jsa_routes, drawing_analysis_routes, part_history_routes, legal_requirements_routes, supplier_review_routes, environmental_risk_routes, msds_routes, evacuation_routes, training_matrix_routes, document_control_routes, customer_satisfaction_routes, iso_modules_routes, employment_applications_routes, injury_register_routes, management_review_routes, outstanding_actions_routes, ohs_meetings_routes, housekeeping_audits_routes, injury_graph_routes, audit_schedule_routes, ncr_routes, compliance_registers_routes, plant_hazard_checks_routes, near_miss_routes, training_appraisal_routes, leave_of_absence_routes, risk_opportunities_routes, courier_kpi_routes, standards_library_routes, audit_templates_routes, asset_registers_routes, menu_config_routes, ims_manual_routes, policies_routes, rfq_routes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -97,6 +97,7 @@ app.include_router(asset_registers_routes.router)
 app.include_router(menu_config_routes.router)
 app.include_router(ims_manual_routes.router)
 app.include_router(policies_routes.router)
+app.include_router(rfq_routes.router)
 
 app.add_middleware(
     CORSMiddleware,

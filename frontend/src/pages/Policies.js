@@ -22,6 +22,7 @@ Quill.register(Quill.import('attributors/style/align'), true);
 
 const MODULES = {
   toolbar: [
+    [{ header: [1, 2, false] }],
     [{ font: FONTS }, { size: SIZES }],
     ['bold', 'italic', 'underline', 'strike'],
     [{ script: 'sub' }, { script: 'super' }],

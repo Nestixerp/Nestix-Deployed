@@ -142,8 +142,11 @@ async def export_policy_pdf(pid: str, current_user=Depends(get_current_user)):
   size: A4; margin: 2cm; margin-bottom: 3.4cm;
   @frame footer_frame {{ -pdf-frame-content: footer_content; left: 2cm; width: 17cm; bottom: 0.8cm; height: 2.2cm; }}
 }}
-body {{ font-family: Calibri; font-size: 12pt; }}
-p {{ margin: 0 0 8pt 0; }}
+body {{ font-family: Calibri; font-size: 11pt; line-height: 1.2; }}
+p {{ margin: 0 0 3pt 0; }}
+h1 {{ font-family: Calibri; font-size: 16pt; font-weight: bold; margin: 8pt 0 4pt 0; }}
+h2 {{ font-family: Calibri; font-size: 13pt; font-weight: bold; margin: 6pt 0 3pt 0; }}
+li {{ margin: 0 0 2pt 0; }}
 #footer_content {{ font-size: 8.5pt; border-top: 0.6pt solid #444444; padding-top: 4pt; }}
 </style></head><body>
 {logo_html}

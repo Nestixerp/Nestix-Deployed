@@ -1,0 +1,70 @@
+{
+  "summary": "Frontend-only end-to-end review of Material RFQs, public supplier response, RFQ status controls, Policy editor/PDF, and Quotes regression. Core RFQ and Policy functionality passed: admin navigation, initial RFQ-0001/1-response state, RFQ creation and persistence, clipboard value, seeded response details, unauthenticated public validation/submission, internal second-response visibility, close/public-closed/reopen cycle, two seeded policies, Heading/Font/Size toolbar controls, computed Calibri 11pt/1.2 editor styling, PDF download, and Quotes load. One integration defect remains: all RFQ Sonner notifications are invisible; denied clipboard permission also causes an uncaught runtime error.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "RFQ notifications",
+        "issue": "Required create, copied-link, close/reopen, and delete toasts do not render. Reproduced after a successful clipboard write: clipboard contained the correct public URL, but there were zero [data-sonner-toast] elements and no expected toast text.",
+        "selector": "[data-sonner-toast]",
+        "priority": "HIGH"
+      },
+      {
+        "component": "RFQ copy supplier link",
+        "issue": "When clipboard permission is denied, navigator.clipboard.writeText rejects without handling and triggers an uncaught NotAllowedError/CRA runtime overlay instead of graceful feedback.",
+        "selector": "[data-testid='copy-rfq-link-RFQ-0001']",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "RFQ create/copy/status notifications",
+        "issue": "RFQs.js calls toast from 'sonner', while App.js mounts only components/ui/toaster (the separate useToast implementation), so Sonner has no mounted renderer. Functional API/clipboard actions complete, but user feedback required by the feature is absent.",
+        "affected_selectors": [
+          "[data-testid='create-rfq-btn']",
+          "[data-testid^='copy-rfq-link-']",
+          "button[title='Close enquiry']",
+          "button[title='Reopen enquiry']"
+        ]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "RFQ dialogs",
+        "issues": [
+          "Both create and responses dialogs log Radix accessibility warnings because DialogContent has no DialogDescription/aria-describedby."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_26.json"
+  ],
+  "action_items": [
+    "Mount the Sonner Toaster (frontend/src/components/ui/sonner.jsx) in App.js in addition to the existing useToast Toaster, or consistently migrate RFQs.js to the mounted toast system.",
+    "Await/catch navigator.clipboard.writeText in both copyLink and createRfq, and show accurate success/failure feedback without an unhandled rejection.",
+    "Add DialogDescription or explicit aria-describedby handling to both RFQ dialogs."
+  ],
+  "critical_code_review_comments": [
+    "rfq_routes.py _next_number derives RFQ numbers from count_documents; deleting an RFQ reuses a previous number, and concurrent creates can generate duplicates. Use an atomic counter or uniqueness-enforced sequence.",
+    "RFQs.js load/openView/toggleStatus/removeRfq have no error handling, so request failures become unhandled promises with no recoverable UI state.",
+    "Status toggle, delete, item material/quantity/remove, supplier phone/item notes, and dialog copy controls lack data-testid attributes despite being interactive controls.",
+    "RFQs.js clipboard calls are fire-and-forget promises; this directly caused the reproduced NotAllowedError overlay under denied headless clipboard permission."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_26.json"
+  ],
+  "success_rate": {
+    "backend": "N/A (frontend-only request; backend tests skipped)",
+    "frontend": "90% of scoped behavior; all core data flows passed, required RFQ toast feedback failed"
+  },
+  "seed_data_creation": "Created TEST_UI Material RFQ Iter26 as RFQ-0002 and deleted it after verification. Added the requested public response 'TEST QA Supplier Iter26' to RFQ-0001; RFQ-0001 now has 2 responses and was restored to Open after close/reopen testing. RFQ-0001 was not deleted.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / admin123 (read from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "RFQ-0001 public token remains DIBfq-A8vBSagWWGtSL031N8_hYjYLS5, status Open, response count 2. Public flow was tested in fresh contexts with localStorage token absent. Clipboard itself works when permission is granted; only toast rendering is broken. Policies may briefly show an empty initial state while loading; wait for policy-item-* controls before asserting the register.",
+  "rca_of_the_issue": "App.js imports Toaster from components/ui/toaster.jsx, which renders only the custom useToast store. RFQs.js imports toast from the separate 'sonner' package, but no Sonner Toaster is mounted anywhere, so Sonner calls produce no DOM notifications. Separately, copyLink and post-create clipboard writes neither await nor catch writeText; denied browser permission therefore produces an unhandled NotAllowedError and development runtime overlay."
+}

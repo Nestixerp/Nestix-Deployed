@@ -2,7 +2,7 @@
 .policy-editor .ql-container {
   min-height: 480px;
   font-family: Calibri, Carlito, 'Segoe UI', sans-serif;
-  font-size: 12pt;
+  font-size: 11pt;
 }
 .policy-editor .ql-editor {
   min-height: 480px;
@@ -11,7 +11,11 @@
   padding: 1.5cm 2cm;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.12);
   background: white;
+  line-height: 1.2;
 }
+.policy-editor .ql-editor p { margin: 0 0 3pt 0; }
+.policy-editor .ql-editor h1 { font-size: 16pt; font-weight: bold; margin: 8pt 0 4pt 0; }
+.policy-editor .ql-editor h2 { font-size: 13pt; font-weight: bold; margin: 6pt 0 3pt 0; }
 .policy-editor .ql-toolbar {
   position: sticky;
   top: 110px; /* below the app top bar + policy actions bar */
