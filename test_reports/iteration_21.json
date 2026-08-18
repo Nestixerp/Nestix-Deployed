@@ -1,0 +1,29 @@
+{
+  "summary": "Iter-21 final targeted retest for the offscreen print stage fix in Courier KPI. All three print flows (Manage → Print, Comparison → Print, JET per-courier → Print) now produce identical, complete print popups. Popup HTML from every entry point contains exactly 10 non-blank data:image/png images (6 per-courier + 4 comparison, all base64 length >>5000 chars) and 0 blank 'data:,' placeholders. All 10 required headings present in every popup. After the popup opens, 0 elements with id starting with 'ck-print-' remain on the main page — confirming setPrintMode(false) in the finally block properly tears down the offscreen stage. Regression: iter-19/20 checks still pass (period=Rolling, endMonth=2026-02 wired; tabs 'JET, Toll, StarTrack, Comparison, Manage Couriers' visible; no console a11y warnings from Dialog).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_courier_kpi_iter19.py",
+    "/app/backend/tests/test_courier_kpi_iter20.py",
+    "/app/test_reports/pytest/iter20_courier_kpi.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Offscreen print stage (position:fixed; left:-10000px; width:900px; each chart 900x380) correctly forces Chart.js to draw filled canvases regardless of which tab the user was viewing. Capture pipeline (setPrintMode(true) → 2x rAF → 400ms settle → toDataURL) is race-free in practice — all 10 images consistently non-blank across 3 entry points.",
+    "setPrintMode(false) in finally block is safe against window.open being blocked (already handled: `if (!w) { setPrintMode(false); return; }`) and against exceptions inside the capture path — verified 0 ck-print-* nodes remain in DOM after each of the 3 print runs.",
+    "Minor: Mixed-Content console error `http://.../api/settings/` — unrelated to Courier KPI; timezone settings request is issued over http on an https page. Pre-existing issue seen in prior iterations; recommend switching that axios call to use REACT_APP_BACKEND_URL (https).",
+    "Suggestion: the offscreen stage renders 6 + 4 = 10 Chart.js instances every time Print is clicked; that's ~200ms extra CPU on machines with many couriers. Acceptable trade-off, but if the fleet grows past ~20 couriers, consider capturing charts sequentially (mount one, snapshot, unmount) to reduce peak memory."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (frontend only)", "frontend": "100% (3/3 print entry points produce 10/10 non-blank images and all 10 required headings; offscreen stage torn down cleanly)" },
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "None. Used the 3 couriers (JET, Toll, StarTrack) + KPI entries for 2025-11, 2025-12, 2026-01 already seeded by main agent (as instructed). No teardown performed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Courier KPI print flow is fully verified end-to-end via the offscreen print stage. Data-testids in use: ck-period, ck-end-month, ck-tab-manage, ck-tab-compare, ck-tab-JET/Toll/StarTrack, ck-print, ck-add-courier, ck-save-courier, ck-edit-courier-*, ck-delete-courier-*, ck-row-{cid}-{month}, ck-edit-{cid}-{month}, ck-entry-on-3hr/late-3hr/on-4hr/late-4hr, ck-save-entry. Backend regression tests at /app/backend/tests/test_courier_kpi_iter19.py (11) and test_courier_kpi_iter20.py (4) remain green from prior iterations.",
+  "rca_of_the_issue": "iter-20 note (blank per-courier PNGs when printing from Manage tab) is RESOLVED. Root cause: Chart.js instances mounted inside hidden Radix TabsContent (even with forceMount) render into 0-sized canvases, so canvas.toDataURL() returns effectively-empty PNGs. Fix in iter-21 code: a dedicated offscreen container (position:fixed; left:-10000px) mounted only during printMode with each chart at fixed 900x380 dimensions. handlePrint sets printMode=true, waits 2 rAFs + 400ms for Chart.js to draw, captures canvases from the ck-print-* ids, opens the popup, and unmounts the stage in the finally block via setPrintMode(false). Verified via page.evaluate that 0 ck-print-* elements remain in the DOM after each print."
+}

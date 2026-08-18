@@ -1,0 +1,68 @@
+{
+  "summary": "Frontend-only regression run for IMS Audit Framework upgrade. Executed 12 scenario groups across Standards Library, Audit Templates, new template audit (17-section Full IMS), Help drawer edit/save, finding dialog (4 tabs / status/risk/samples/validation), Asset Registers, Audit Dashboard, Legacy audit navigation. ~85% of targeted flows PASS. Two real defects found: (1) Audit LOCK does not reflect in UI (banner never appears; state does not persist on reload) although backend POST /lock returns 200 and writes an audit_trail entry — GET /api/audits/{id} response appears to omit/not update the `locked` field on the audit_reports document; (2) Legacy audit AR-2025-026 could not be opened via list card click — the eye/view button click did not navigate (list uses stateful onClick on icon-only <button>s, no data-testid on cards / no anchor href), so full legacy regression (clause rendering, Management Review→Performance Evaluation help mapping, legacy finding save) is UNVERIFIED via UI. Also: minor mixed-content warnings (some XHRs default to http:// for /api/settings/) — non-blocking but should be fixed.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/audits/{id}/lock", "issue": "Endpoint returns 200 and writes audit_trail entry (audit_locked), but the audit_reports document does not appear to reflect locked=true on subsequent GET — banner never renders, state does not persist across reload. Verified for both AR-2026-005 (new template audit) and AR-2026-003. Backend code at audit_routes.py:453-462 sets locked:True in $set — investigate why GET /api/audits/{id} returns locked=None (serializer masking? current_user None? projection?).", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AuditReportDetail (Lock/Reopen)", "issue": "audit-locked-banner never appears after clicking audit-lock-btn (confirm dialog accepted, POST /lock returns 200). audit-reopen-btn also does not appear. Reload does not restore locked state.", "selector": "[data-testid=\"audit-locked-banner\"] / [data-testid=\"audit-reopen-btn\"]", "priority": "HIGH"},
+      {"component": "ISOAudits (audit list)", "issue": "Audit list cards do not expose an anchor/link or data-testid for navigation; the view (eye) icon button click via JS does not navigate to the detail page. Blocks legacy AR-2025-026 e2e regression via UI. Consider adding data-testid=\"audit-view-{id}\" and/or wrapping the card in a <Link>.", "selector": "audit list cards on /quality/audits", "priority": "MEDIUM"},
+      {"component": "Mixed content", "issue": "Some XHRs (/api/settings/, /api/timezone) are fired with http:// under an https page and get blocked by browser Mixed Content policy. Non-blocking but noisy console errors. Fix baseURL to use protocol-relative or REACT_APP_BACKEND_URL exactly.", "selector": "console", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Audit Lock/Reopen", "issue": "Frontend POST /audits/{id}/lock succeeds but subsequent GET reflects no locked state, so UI never transitions to locked mode.", "affected_selectors": ["[data-testid=\"audit-lock-btn\"]","[data-testid=\"audit-locked-banner\"]","[data-testid=\"audit-reopen-btn\"]"]},
+      {"flow": "Legacy audit open from list", "issue": "Cannot navigate to /quality/audits/{legacyId} from list card — no clickable link; only trash / download / eye icon buttons without proper testids or href.", "affected_selectors": ["card containing 'AR-2025-026'"]}
+    ],
+    "design_issues": [
+      {"screen": "AuditReportDetail help drawer", "issues": ["Help drawer overlays the finding dialog when both are opened — pointer-events overlay from finding-dialog intercepts clicks inside the drawer edit form (only triggered when opening drawer while dialog remains mounted). Consider closing peer overlays."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_ims_audit_framework.py (from iter 22, reused)"],
+  "action_items": [
+    "Fix audit LOCK persistence — investigate why GET /api/audits/{id} does not surface locked=true after POST /lock (likely a serializer/response-model omission or MongoDB doc missing 'locked' field on some records).",
+    "Add data-testid + real anchor navigation to audit list cards (e.g., data-testid='audit-view-{id}') so eye button click navigates to /quality/audits/{id}. Currently blocks legacy audit regression via UI.",
+    "Fix mixed-content HTTP calls to /api/settings and /api/timezone (blocked by browser under HTTPS).",
+    "(Nice-to-have) Prevent Help drawer and Finding dialog from being mounted simultaneously to avoid overlay pointer-events conflict."
+  ],
+  "critical_code_review_comments": [
+    "AuditReportDetail.js grew large — consider extracting HelpDrawer, FindingDialog, LockReopen and Trail into separate components under /components/audit.",
+    "lockAudit() in AuditReportDetail.js doesn't error-handle the POST response — silent failures result in stale UI. Wrap in try/catch and toast on error.",
+    "Backend audit_routes.py lock_audit sets 'locked: True' but no read-side test validates this — add a test that POSTs lock then GETs the audit and asserts locked==True (current backend test only checks status code and downstream 423)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "~85% (17/20 scenarios PASS)"},
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "Created 1 new Full-IMS template audit AR-2026-005 (id 1783504780637713). Added 1 sample (Fire Extinguisher FE-99) and 1 finding update on that audit. Added 1 transition-gap row in Standards Library (TEST). Added 1 Fire Equipment asset FE-01 / Laser Bay to Asset Registers. Kept legacy AR-2025-026 and AR-2025-TEST intact.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend already passed 25/25 in iter 22 for API contract, but the audit LOCK UI regression suggests the GET response and/or persistence path needs a read-side integration test. If UI is refixed, retest with the new template audit id 1783504780637713 (AR-2026-005) — Lock → banner → Reopen → banner gone → History dialog contains entries. Legacy audit AR-2025-026 needs the list card to be made navigable before UI regression can complete. Help drawer edit/save DOES work end-to-end when only the drawer is open (Purpose was successfully edited & persisted). Native <select> elements are used for finding-status-select / finding-risk-select / sample-type-select — use page.select_option(label=...), not click+role=option.",
+  "passed_scenarios": [
+    "Login (admin/admin123) -> /dashboard",
+    "Standards Library page loads with 5 tabs (sl-tab-standards/clauses/mappings/help/transition)",
+    "Standards tab shows all standards rows (7 including a TEST_STD from prior runs)",
+    "Clauses tab renders clause rows on standard filter (149 rows)",
+    "Transition tab: add gap via sl-new-transition + sl-edit-gap_identified + sl-edit-action_required + sl-save-btn -> row appears",
+    "Audit Templates: 14 template cards render (template-card-* testids)",
+    "Full IMS Internal Audit template expands and shows 17-section table with Help buttons",
+    "template-use-{id} -> dialog with template-auditor-input -> template-create-confirm -> navigates to /quality/audits/{new_id}",
+    "New audit shows 17 clauses via [data-testid^='clause-status-'] with 17 help-btn-* controls",
+    "Help drawer opens (help-drawer), enters edit (help-edit-btn), fields help-edit-purpose etc render, help-save-btn persists updated purpose text visible in read view (verified with 'TEST_PURPOSE_XYZ_123')",
+    "help-drawer-close closes drawer",
+    "Finding dialog opens with 4 tabs (finding-tab-finding/details/ca/samples)",
+    "finding-status-select='In Progress' + finding-risk-select='Medium' + Save -> clause-status-1 badge updates to 'In Progress'",
+    "Samples tab: sample-type-select='Fire Extinguisher' + sample-id-input='FE-99' + sample-add-btn -> row appears in samples table",
+    "Validation: Finding Type='Conformity' + follow-up checkbox + Save -> alert 'A section with a required follow-up action cannot be classified as Conformity...' blocks save",
+    "audit-history-btn opens Audit Trail dialog with real entries (audit_locked, sample_*, finding_* rows)",
+    "Asset Registers: 4 stat cards (ar-stat-fire_equipment, ar-stat-test_tag, ar-stat-first_aid, ar-stat-spill_kit); ar-new-item -> ar-edit-* fields fill -> ar-save-btn -> item persisted",
+    "Audit Dashboard: dash-total-audits, dash-open-findings, dash-overdue-findings, dash-transition + severity bars (dash-sev-low/medium/high/critical) present"
+  ],
+  "failed_scenarios": [
+    "Audit LOCK -> audit-locked-banner never renders after POST /lock returns 200 (both fresh audit and reload)",
+    "Audit REOPEN dialog and reopen-* testids never reachable because banner/reopen-btn don't render (blocked by above)",
+    "Legacy audit AR-2025-026 navigation from /quality/audits list — clicking eye button (icon-only <button>) does not navigate; Management Review->Performance Evaluation help mapping and legacy finding save could NOT be verified via UI (UNVERIFIED, not necessarily broken)"
+  ],
+  "rca of the issue": "LOCK/UNLOCK UI regression: POST /api/audits/{id}/lock returns 200 (per supervisor backend log) and audit_trail records 'audit_locked'. But GET /api/audits/{id} response returned by the endpoint shows locked=None (verified via curl of the same audit id). Frontend fetches after lock and reads audit.locked which is falsy -> banner and reopen-btn never render. Root cause likely lives in either (a) the audit GET response model / serializer stripping the `locked` field, or (b) the update_one $set path silently failing due to a missing/renamed collection or query mismatch (though the trail write path succeeds in the same handler, so this is less likely). Reproduce: 1) login as admin, open any audit detail page, 2) click Lock Audit and accept the confirm, 3) verify backend log shows 200 on /lock, 4) reload the page, 5) observe: 'Lock Audit' button still present, banner not visible, and curl of GET /api/audits/{id} returns locked=None. Mitigation: ensure the GET serializer includes `locked`, `locked_by`, `locked_at`; and add a backend test that lock->GET returns locked==True."
+}

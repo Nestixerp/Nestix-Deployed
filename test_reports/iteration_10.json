@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 10 (colour-coded audit categories) tested end-to-end. Backend: 18/18 pytest pass (4 new Categories tests + original 14 regression tests). Frontend Playwright covers legend, legacy-char colour mapping on 2025, mark/clear/persist via popover, add Customer Audit (CUST) with green colour, mark cell w/ new category and persist, edit INT colour, delete CUST and re-verify popover shrinks to 2 options, Print/PDF HTML produces bg colours + <span class='lbl'> + .legend block + QMSF 28 doc-control footer. One real UI bug found: after deleting a category, cells that referenced it render the RAW stored id (e.g. 'tmp-1782170693975') as text, NOT blank — contradicting the spec note 'resolveCell returns null'. Same fallback path in Print HTML.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AuditSchedule cell render fallback", "issue": "When resolveCell() returns null (unknown/orphaned id, e.g. after deleting the category), the cell falls back to displaying the raw stored value as text. Spec mandates the cell should appear blank. Repro: add a new category, mark a cell with it, save, delete the category, save categories — the cell now shows the raw uuid/tmp- id instead of being blank.", "selector": "[data-testid^='audit-cell-']", "priority": "MEDIUM"},
+      {"component": "AuditSchedule print HTML fallback", "issue": "Same fallback in handlePrint() — `return '<td class=\"cell\">${esc(raw)}</td>'` prints the raw orphan id. Should also render blank.", "selector": "td.cell", "priority": "LOW"},
+      {"component": "CategoryEditor", "issue": "Newly-added category uses tmp-${Date.now()} as the id and the backend stores it verbatim (`c.id or str(uuid.uuid4())`). This makes orphan ids predictable but also non-uuid. Either filter ids starting with 'tmp-' on the backend or normalise on the frontend before save.", "selector": "[data-testid='cat-save']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Audit Schedule (pre-existing)", "issues": ["/api/settings/ is requested over http:// causing Mixed Content errors on every page (already flagged in iter 9, unrelated to this feature)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_audit_schedule.py",
+    "/app/test_reports/pytest/pytest_audit_schedule.xml"
+  ],
+  "action_items": [
+    "FIX: in AuditSchedule.js cell render (line ~610), change `{cat ? (cat.short || '') : (raw || '')}` to `{cat ? (cat.short || '') : ''}` so orphan ids appear blank per spec.",
+    "FIX: in handlePrint() unmatched branch, return `<td class=\"cell\"></td>` instead of echoing raw.",
+    "OPTIONAL: backend `replace_categories` could replace ids matching /^tmp-/ with a fresh uuid for cleanliness.",
+    "PRE-EXISTING: settings service requests http:// — causes Mixed Content noise."
+  ],
+  "critical_code_review_comments": [
+    "resolveCell legacy_chars matcher is case-sensitive then case-insensitive — works correctly for 'C' and 'X' demo data.",
+    "Popover positions via getBoundingClientRect with viewport clamps — good.",
+    "Print HTML uses -webkit-print-color-adjust:exact and inline bg/colour — should preserve colours on print.",
+    "Default categories seeded only when collection is empty — _ensure_categories_seeded is idempotent.",
+    "PUT /categories wipes & reinserts; safe because cells store ids and orphan ids gracefully degrade (apart from the UI fallback bug above).",
+    "ScheduleUpdate PUT response now includes embedded `categories` — saves one round-trip."
+  ],
+  "updated_files": ["/app/backend/tests/test_audit_schedule.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "~93% (1 medium fallback bug)"},
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Cleanup performed by tests: pre/post DELETE of 2099 and 2098. Categories restored to defaults (INT #2563eb, COMPASS #dc2626) at end. Customer Audit deleted at end. 2025 row1-mar still holds an orphan tmp- id in DB (resolveCell falls back; user can clear via popover). Recommend running `db.audit_schedules.update_one({year:2025},{$set:{'elements.1.cells.mar':''}})` if a fully-clean visual is required.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All new category APIs work. Frontend bug: orphan/unknown cell values render as raw text instead of blank. Single-line fix in AuditSchedule.js cell render and handlePrint(). After fix, re-run the full Playwright flow including 'delete Customer Audit and verify referenced cell becomes blank' to confirm. Backend tests are stable and auto-clean. /api/settings/ Mixed Content pollution remains pre-existing.",
+  "rca of the issue": "AuditSchedule.js line ~610 renders `cat ? (cat.short||'') : (raw||'')`. When resolveCell returns null because the stored uuid/tmp-id no longer matches any category, the JSX falls through to `raw` (the orphan id string) and prints it. Should render '' to match the spec ('cells … now appear blank'). Same pattern exists in the print HTML builder."
+}

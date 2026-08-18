@@ -1,0 +1,86 @@
+{
+  "summary": "Tested Download PDF fix for Quantity/Price Breaks. Both Download PDF and Print Quote functions now correctly include the Quantity Breaks section for Quote #99.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/settings/",
+        "issue": "Mixed Content error - HTTP request blocked on HTTPS page. Settings endpoint sometimes uses HTTP instead of HTTPS.",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_4.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "username": "admin",
+    "password": "admin123"
+  },
+  "seed_data_creation": "None - used existing Quote #99 with 2 quantity breaks (qty 1 and qty 5)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Download PDF bug is now fixed. Both Download PDF (jsPDF + html2canvas) and Print Quote (window.print) functions correctly include the Quantity Breaks section. Quote #99 (Sway Control Bracket - 769116) has 2 quantity breaks: qty 1 at $76.62 and qty 5.",
+  "features_tested": {
+    "download_pdf_quantity_breaks": {
+      "status": "FIXED",
+      "details": [
+        "Tested Quote #99 (Sway Control Bracket - 769116) with 2 quantity breaks",
+        "Clicked 'Download PDF' button (4th action button in row)",
+        "PDF container captured before removal - contains 'Quantity Breaks': YES",
+        "PDF contains 'Price per Part (Ex GST)' column: YES",
+        "PDF contains 'Total Price (Ex GST)' column: YES",
+        "Download triggered successfully (1 download detected)",
+        "HTML structure verified: Quantity Breaks - Price per Quantity (Ex GST) header with proper table"
+      ]
+    },
+    "print_quote_quantity_breaks": {
+      "status": "WORKING",
+      "details": [
+        "Print Quote button still works correctly",
+        "Print window contains 'Quantity Breaks': YES",
+        "Shows qty 1: $76.62 / $76.62",
+        "Shows qty 5: (calculated values)",
+        "Print functionality unchanged and working"
+      ]
+    }
+  },
+  "test_evidence": {
+    "download_pdf": {
+      "quote_tested": "Quote #99 - Sway Control Bracket - 769116",
+      "button_clicked": "Download PDF (Button index 3, title='Download PDF')",
+      "pdf_container_captured": true,
+      "quantity_breaks_present": true,
+      "download_triggered": true,
+      "html_snippet": "Quantity Breaks - Price per Quantity (Ex GST)</h3><table>...<th>Quantity</th><th>Price per Part (Ex GST)</th><th>Total Price (Ex GST)</th>..."
+    },
+    "print_quote": {
+      "quote_tested": "Quote #99 - Sway Control Bracket - 769116",
+      "button_clicked": "Print (Button index 2, title='Print')",
+      "print_window_opened": true,
+      "quantity_breaks_present": true,
+      "quantity_break_values": [
+        {"quantity": "1 parts", "price_per_part": "$76.62", "total": "$76.62"},
+        {"quantity": "5 parts", "price_per_part": "calculated", "total": "calculated"}
+      ]
+    }
+  },
+  "code_fix_verified": {
+    "file": "/app/frontend/src/pages/Quotes.js",
+    "function": "handleDownloadPDF",
+    "lines_added": "2316-2337",
+    "fix_description": "Added quantity breaks HTML section to the download PDF template, using calculateQuantityBreakPricing function same as print function"
+  }
+}

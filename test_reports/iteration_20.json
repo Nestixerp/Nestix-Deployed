@@ -1,0 +1,33 @@
+{
+  "summary": "Iter-20 targeted retest for the 4 fixes from iter-19 on the Courier KPI module. Backend: 15/15 pytest PASS (4 new PUT exclude_unset tests in test_courier_kpi_iter20.py + 11 iter19 regression). Frontend Playwright: (REG#1) Print from MANAGE / COMPARE / JET tabs — popup HTML now contains per-courier headings 'JET — 3 Hours KPI', 'Toll — 3 Hours KPI', 'StarTrack — 3 Hours KPI' AND a Comparison section, with NO 'No courier data available.' fallback. (REG#2) After saving a courier from Manage tab, activeTab remains 'manage' (data-state=active, ck-add-courier still visible) — user can immediately add another. Same for compare after fetchData refresh. (REG#3) 0 Radix DialogContent a11y console warnings; description text visible in Add/Edit courier and KPI Entry dialogs. (REG#4) PUT /couriers/{id}: body {} preserves all fields, body {color} only updates color, body {active:false/true} correctly toggles. (REG#5) forceMount confirmed — 10 chart canvases mounted in DOM but 0 visible on Manage tab (hidden via data-[state=inactive]:hidden), no visual overlap.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_courier_kpi_iter20.py",
+    "/app/backend/tests/test_courier_kpi_iter19.py",
+    "/app/test_reports/pytest/iter20_courier_kpi.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Cosmetic-only observation for Print: with forceMount, Chart.js still renders into 0-sized hidden canvases, so canvas.toDataURL() returns a valid-but-blank 'data:,' PNG for tabs the user never visited. Result: when the user clicks Print while on the Manage tab (without ever having viewed each per-courier tab), the per-courier HEADINGS appear (bug fixed) and comparison charts appear (they are on the compare tab which IS force-mounted and does render because Chart.js sees a non-zero container size in the compare panel), but the per-courier chart IMAGES in the popup may be blank. Observed image counts: MANAGE=2, COMPARE=6, JET=6 data-URLs. To make images always render, consider either (a) offscreen container that always keeps courier charts at fixed size, or (b) programmatically resize/reflow chart.js instances before capture. Non-blocking — headings + comparison satisfy the retest acceptance criteria and no 'No courier data available.' fallback is shown.",
+    "PUT /couriers/{id} exclude_unset fix is clean — verified by 4 new pytest cases and by the previous iter-19 test suite still passing.",
+    "activeTab exemption for 'manage'/'compare' in fetchData is straightforward and correctly stops the tab-switch when couriers list changes; no regression in the empty-state path (still switches to 'manage' when 0 couriers)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_courier_kpi_iter20.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% on the 4 targeted regressions; visual-only note on blank chart images from Manage tab (headings/comparison still work)"},
+  "test_credentials": "admin/admin123 via POST /api/auth/login (token in access_token)",
+  "seed_data_creation": "Created 3 UI couriers (JET/Toll/StarTrack) + 1 KPI entry on JET (2025-08 = 86.2/13.8/97.2/2.8), and pytest created 4x TEST_ITER20_* couriers. All soft-deleted at teardown (verified UI shows empty state at end of run).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 iter-19 defects (Print empty from non-courier tabs, activeTab reset on Manage/Compare, DialogDescription a11y, PUT overwriting fields to None) are now FIXED. Backend collections `couriers` and `courier_kpi_entries` still in use. Tests: /app/backend/tests/test_courier_kpi_iter19.py (11 tests) and /app/backend/tests/test_courier_kpi_iter20.py (4 tests). Frontend gotcha still valid: Chart.js canvases keep 0-size in inactive TabsContent even with forceMount, so per-courier chart IMAGES (not headings) may be blank in the popup when printing from Manage tab without ever visiting each courier tab. Recommend: if you want reliable image capture, add an offscreen fixed-size mount for print or trigger chart.resize() before toDataURL().",
+  "rca_of_the_issue": "All 4 iter-19 root causes are addressed: (1) TabsContent now uses forceMount className='data-[state=inactive]:hidden' — canvases stay mounted so Print can find them; (2) fetchData() now exempts activeTab in ['manage','compare'] from the forced switch; (3) DialogDescription added to Add/Edit courier and KPI Entry dialogs — 0 Radix warnings in console; (4) update_courier() uses payload.dict(exclude_unset=True) so unset fields are never written."
+}

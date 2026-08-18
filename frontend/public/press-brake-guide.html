@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Press Brake Quoting Engine — FileMaker Implementation Guide</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; line-height: 1.6; background: #fff; padding: 40px; max-width: 1100px; margin: 0 auto; }
+        
+        h1 { font-size: 28px; color: #0f172a; border-bottom: 3px solid #0f172a; padding-bottom: 12px; margin-bottom: 8px; }
+        h2 { font-size: 22px; color: #1e40af; margin-top: 40px; margin-bottom: 16px; border-left: 4px solid #1e40af; padding-left: 12px; }
+        h3 { font-size: 17px; color: #334155; margin-top: 24px; margin-bottom: 10px; }
+        h4 { font-size: 15px; color: #475569; margin-top: 16px; margin-bottom: 8px; }
+        
+        p { margin-bottom: 10px; font-size: 14px; }
+        .subtitle { color: #64748b; font-size: 14px; margin-bottom: 30px; }
+        
+        table { width: 100%; border-collapse: collapse; margin: 12px 0 20px 0; font-size: 13px; }
+        th { background: #1e293b; color: #fff; padding: 10px 14px; text-align: left; font-weight: 600; }
+        td { padding: 9px 14px; border: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+        tr:hover { background: #f1f5f9; }
+        
+        .formula-box { background: #fffbeb; border: 2px solid #f59e0b; border-radius: 8px; padding: 16px 20px; margin: 14px 0; font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; line-height: 1.8; }
+        .formula-box strong { color: #92400e; }
+        
+        .fm-field { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 6px; padding: 12px 16px; margin: 10px 0; }
+        .fm-field code { background: #dbeafe; padding: 2px 6px; border-radius: 3px; font-size: 13px; color: #1e40af; }
+        
+        .fm-calc { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; padding: 16px 20px; margin: 14px 0; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.9; white-space: pre-wrap; }
+        .fm-calc .label { color: #166534; font-weight: bold; font-family: 'Segoe UI', sans-serif; display: block; margin-bottom: 6px; font-size: 13px; }
+        
+        .note { background: #fefce8; border-left: 4px solid #eab308; padding: 10px 14px; margin: 12px 0; font-size: 13px; color: #713f12; }
+        .warning { background: #fef2f2; border-left: 4px solid #ef4444; padding: 10px 14px; margin: 12px 0; font-size: 13px; color: #991b1b; }
+        .tip { background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 10px 14px; margin: 12px 0; font-size: 13px; color: #1e3a5f; }
+        
+        .section-num { display: inline-block; background: #1e40af; color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-size: 14px; font-weight: bold; margin-right: 8px; }
+        
+        .field-table td:first-child { font-weight: 600; white-space: nowrap; width: 200px; }
+        .field-table td:nth-child(2) { width: 120px; text-align: center; }
+        
+        .waterfall { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 2.0; }
+        .waterfall .line { display: flex; justify-content: space-between; }
+        .waterfall .line-result { border-top: 2px solid #334155; font-weight: bold; padding-top: 4px; margin-top: 4px; }
+        .waterfall .line-final { border-top: 3px double #1e40af; font-weight: bold; padding-top: 6px; margin-top: 6px; color: #1e40af; font-size: 15px; }
+        
+        hr { border: none; border-top: 1px solid #e2e8f0; margin: 30px 0; }
+        
+        .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px 24px; margin: 20px 0; }
+        .toc ul { list-style: none; padding-left: 0; }
+        .toc li { padding: 4px 0; font-size: 14px; }
+        .toc li a { color: #1e40af; text-decoration: none; }
+        .toc li a:hover { text-decoration: underline; }
+        
+        @media print {
+            body { padding: 20px; font-size: 12px; }
+            h2 { page-break-before: auto; }
+            .fm-calc, .formula-box { page-break-inside: avoid; }
+            table { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+
+<h1>Press Brake Quoting Engine</h1>
+<p class="subtitle">FileMaker Implementation Guide &mdash; Complete Field Definitions, Lookup Tables & Formulas<br>
+Version 2.0 &bull; Generated from Nestix ERP &bull; December 2025</p>
+
+<div class="toc">
+    <strong>Contents</strong>
+    <ul>
+        <li><a href="#overview">1. Overview &amp; How the Engine Works</a></li>
+        <li><a href="#fields">2. FileMaker Fields Required (Complete List)</a></li>
+        <li><a href="#tables">3. Lookup Tables (Create as Value Lists or Case Statements)</a></li>
+        <li><a href="#step1">4. Calculation Step 1: Base Bend Time</a></li>
+        <li><a href="#step2">5. Calculation Step 2: Thickness Factor</a></li>
+        <li><a href="#step3">6. Calculation Step 3: V-Die Size &amp; Factor</a></li>
+        <li><a href="#step4">7. Calculation Step 4: Bend Time per Bend</a></li>
+        <li><a href="#step5">8. Calculation Step 5: Forming Time</a></li>
+        <li><a href="#step6">9. Calculation Step 6: Handling Time (Weight)</a></li>
+        <li><a href="#step7">10. Calculation Step 7: Flip Time</a></li>
+        <li><a href="#step8">11. Calculation Step 8: Box / Complex Geometry Penalty</a></li>
+        <li><a href="#step9">12. Calculation Step 9: Part Time (Subtotal)</a></li>
+        <li><a href="#step10">13. Calculation Step 10: Difficulty Multiplier</a></li>
+        <li><a href="#step11">14. Calculation Step 11: Second Operator Rule</a></li>
+        <li><a href="#step12">15. Calculation Step 12: Final Time per Part</a></li>
+        <li><a href="#cost">16. Cost Calculation (Dollars)</a></li>
+        <li><a href="#markups">17. Optional Markups</a></li>
+        <li><a href="#override">18. Manual Override</a></li>
+        <li><a href="#tooling">19. Tooling Calculations (V-Die, Flange, Tonnage)</a></li>
+        <li><a href="#qtybreaks">20. Quantity Price Breaks</a></li>
+        <li><a href="#example">21. Full Worked Example</a></li>
+        <li><a href="#summary">22. Master Formula Summary (One Page)</a></li>
+    </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="overview"><span class="section-num">1</span> Overview &amp; How the Engine Works</h2>
+
+<p>The Press Brake quoting engine estimates <strong>how many seconds</strong> it takes to bend one part, then converts that time into a <strong>dollar cost</strong> using the operator's hourly rate.</p>
+
+<p>The calculation has <strong>12 steps</strong> that build up from a base bend time, applying modifiers for material thickness, tooling, weight, geometry, and difficulty. The result is seconds-per-part, which becomes dollars-per-part.</p>
+
+<div class="formula-box">
+    <strong>Master Formula:</strong><br>
+    Cost per Part = (Final Seconds &divide; 3600) &times; Hourly Rate + (Setup Cost &divide; Quantity)
+</div>
+
+<p>Every field described below is either an <strong>input field</strong> (operator types a value) or a <strong>calculated field</strong> (FileMaker computes it automatically).</p>
+
+<!-- ============================================================ -->
+<h2 id="fields"><span class="section-num">2</span> FileMaker Fields Required</h2>
+
+<h3>Input Fields (Operator Enters These)</h3>
+<table class="field-table">
+    <tr><th>Field Name</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td>Thickness_mm</td><td>Number</td><td>3</td><td>Material thickness in millimetres</td></tr>
+    <tr><td>BendLength_mm</td><td>Number</td><td>0</td><td>Length of the longest bend in mm</td></tr>
+    <tr><td>NumberOfBends</td><td>Number</td><td>0</td><td>Total number of bends on one part</td></tr>
+    <tr><td>FlipsPerPart</td><td>Number</td><td>0</td><td>Number of times part is flipped/repositioned during forming</td></tr>
+    <tr><td>PartLength_mm</td><td>Number</td><td>0</td><td>Overall part length (for weight calculation)</td></tr>
+    <tr><td>PartWidth_mm</td><td>Number</td><td>0</td><td>Overall part width (for weight calculation)</td></tr>
+    <tr><td>PartWeight_kg</td><td>Number</td><td>(auto)</td><td>Weight per part in kg. Auto-calculated or manually entered.</td></tr>
+    <tr><td>Material</td><td>Text</td><td>Mild Steel</td><td>Value list: Mild Steel, Stainless Steel, Aluminium</td></tr>
+    <tr><td>GeometryType</td><td>Text</td><td>Flange</td><td>Value list: Flange, Channel, Hat, Z-Bend, Box, Complex</td></tr>
+    <tr><td>DifficultyLevel</td><td>Text</td><td>Simple</td><td>Value list: Simple, Moderate, Complex</td></tr>
+    <tr><td>PackingTime_sec</td><td>Number</td><td>2</td><td>Seconds to pack/handle each finished part</td></tr>
+    <tr><td>EfficiencyFactor_pct</td><td>Number</td><td>10</td><td>Shop floor buffer percentage (typically 10%)</td></tr>
+    <tr><td>HourlyRate</td><td>Number</td><td>100</td><td>Press brake operator rate in $/hour</td></tr>
+    <tr><td>SetupTime</td><td>Number</td><td>45</td><td>Machine setup time</td></tr>
+    <tr><td>SetupUnit</td><td>Text</td><td>Minutes</td><td>Value list: Minutes, Hours</td></tr>
+    <tr><td>Quantity</td><td>Number</td><td>1</td><td>Number of parts to produce</td></tr>
+    <tr><td>SecondsOverride</td><td>Number</td><td>(empty)</td><td>Optional: manually enter known seconds per part. Bypasses all calculations if filled.</td></tr>
+    <tr><td>ManualVDie_yn</td><td>Text</td><td>No</td><td>Checkbox: override the auto V-Die calculation</td></tr>
+    <tr><td>ManualVDie_mm</td><td>Number</td><td>0</td><td>Only used if ManualVDie_yn = "Yes"</td></tr>
+    <tr><td>Markup_Stainless</td><td>Text</td><td>No</td><td>Checkbox: +15% markup</td></tr>
+    <tr><td>Markup_ComplexBends</td><td>Text</td><td>No</td><td>Checkbox: +10% markup</td></tr>
+    <tr><td>Markup_MultiSetup</td><td>Text</td><td>No</td><td>Checkbox: +15% markup</td></tr>
+    <tr><td>Markup_TightTolerance</td><td>Text</td><td>No</td><td>Checkbox: +10% markup</td></tr>
+    <tr><td>BendAngles</td><td>Text</td><td></td><td>Reference text, e.g. "4 x 90&deg; (2 Up / 2 Down)". Not used in calculations.</td></tr>
+    <tr><td>ToolingRequired</td><td>Text</td><td></td><td>Reference text, e.g. "Punch: 11.049 (R8) Die: V40". Not used in calculations.</td></tr>
+    <tr><td>ProcessNotes</td><td>Text</td><td></td><td>Free text for operator instructions. Not used in calculations.</td></tr>
+</table>
+
+<h3>Calculated Fields (FileMaker Computes These)</h3>
+<table class="field-table">
+    <tr><th>Field Name</th><th>Type</th><th>Description</th></tr>
+    <tr><td>c_BaseBendTime</td><td>Number</td><td>Step 1 result: seconds per bend (before modifiers)</td></tr>
+    <tr><td>c_ThicknessFactor</td><td>Number</td><td>Step 2 result: multiplier (1.0 / 1.15 / 1.30 / 1.50)</td></tr>
+    <tr><td>c_VDieSize_mm</td><td>Number</td><td>Step 3a: V-Die opening in mm</td></tr>
+    <tr><td>c_VDieFactor</td><td>Number</td><td>Step 3b: V-Die speed multiplier</td></tr>
+    <tr><td>c_BendTime</td><td>Number</td><td>Step 4: modified time per single bend</td></tr>
+    <tr><td>c_FormingTime</td><td>Number</td><td>Step 5: total forming time for all bends</td></tr>
+    <tr><td>c_HandlingTime</td><td>Number</td><td>Step 6: extra seconds for part weight</td></tr>
+    <tr><td>c_FlipTime</td><td>Number</td><td>Step 7: total flip/reposition time</td></tr>
+    <tr><td>c_BoxPenalty</td><td>Number</td><td>Step 8: extra time for box/complex last bend</td></tr>
+    <tr><td>c_PartTime</td><td>Number</td><td>Step 9: subtotal seconds (forming + handling + flips + penalty)</td></tr>
+    <tr><td>c_DifficultyFactor</td><td>Number</td><td>Step 10: multiplier (1.0 / 1.2 / 1.5)</td></tr>
+    <tr><td>c_OperatorMultiplier</td><td>Number</td><td>Step 11: 1 or 2 operators</td></tr>
+    <tr><td>c_FinalSecondsPerPart</td><td>Number</td><td>Step 12: the final seconds per part (the key output)</td></tr>
+    <tr><td>c_SetupCost</td><td>Number</td><td>Setup cost in dollars</td></tr>
+    <tr><td>c_LabourCostPerPart</td><td>Number</td><td>Labour dollars per part (before setup distribution)</td></tr>
+    <tr><td>c_CostPerPart</td><td>Number</td><td>Total cost per part including distributed setup</td></tr>
+    <tr><td>c_MarkupPercent</td><td>Number</td><td>Sum of all ticked markup percentages</td></tr>
+    <tr><td>c_TotalCost</td><td>Number</td><td>Final total cost for entire batch</td></tr>
+    <tr><td>c_MinFlange_mm</td><td>Number</td><td>Minimum flange length</td></tr>
+    <tr><td>c_Tonnage</td><td>Number</td><td>Required press tonnage</td></tr>
+    <tr><td>c_AutoWeight_kg</td><td>Number</td><td>Auto-calculated weight from dimensions</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="tables"><span class="section-num">3</span> Lookup Tables</h2>
+
+<p>These tables are built into the calculated fields using <strong>Case()</strong> statements in FileMaker. They are provided here as reference.</p>
+
+<h3>Table A: Base Bend Time (by Bend Length)</h3>
+<table>
+    <tr><th>If Bend Length is...</th><th>Base Bend Time =</th><th>Reasoning</th></tr>
+    <tr><td>&le; 500 mm</td><td><strong>15 seconds</strong></td><td>Small part, quick to position</td></tr>
+    <tr><td>501 &ndash; 1000 mm</td><td><strong>20 seconds</strong></td><td>Medium, needs alignment</td></tr>
+    <tr><td>1001 &ndash; 2000 mm</td><td><strong>30 seconds</strong></td><td>Large, operator walks along machine</td></tr>
+    <tr><td>&gt; 2000 mm</td><td><strong>45 seconds</strong></td><td>Very large, slow and careful</td></tr>
+</table>
+
+<h3>Table B: Thickness Factor</h3>
+<table>
+    <tr><th>If Thickness is...</th><th>Factor =</th><th>Reasoning</th></tr>
+    <tr><td>&le; 2 mm</td><td><strong>1.00</strong> (no penalty)</td><td>Thin sheet, easy to bend</td></tr>
+    <tr><td>2.1 &ndash; 6 mm</td><td><strong>1.15</strong> (+15%)</td><td>Medium gauge, more springback</td></tr>
+    <tr><td>6.1 &ndash; 10 mm</td><td><strong>1.30</strong> (+30%)</td><td>Heavy gauge, high force needed</td></tr>
+    <tr><td>&gt; 10 mm</td><td><strong>1.50</strong> (+50%)</td><td>Plate work, very slow</td></tr>
+</table>
+
+<h3>Table C: V-Die Factor (by V-Die Size)</h3>
+<table>
+    <tr><th>If V-Die Size is...</th><th>Factor =</th><th>Reasoning</th></tr>
+    <tr><td>&le; 12 mm</td><td><strong>1.00</strong></td><td>Small die, standard speed</td></tr>
+    <tr><td>13 &ndash; 24 mm</td><td><strong>1.10</strong> (+10%)</td><td>Medium die, slightly more care</td></tr>
+    <tr><td>25 &ndash; 40 mm</td><td><strong>1.20</strong> (+20%)</td><td>Large die, heavier tooling</td></tr>
+    <tr><td>&gt; 40 mm</td><td><strong>1.35</strong> (+35%)</td><td>Very large die, slow approach</td></tr>
+</table>
+
+<h3>Table D: Handling Time (by Part Weight)</h3>
+<table>
+    <tr><th>If Part Weight is...</th><th>Handling Time =</th><th>Reasoning</th></tr>
+    <tr><td>&le; 5 kg</td><td><strong>0 seconds</strong></td><td>Light, easy to handle</td></tr>
+    <tr><td>5.1 &ndash; 10 kg</td><td><strong>5 seconds</strong></td><td>Moderate, careful lifting</td></tr>
+    <tr><td>10.1 &ndash; 15 kg</td><td><strong>10 seconds</strong></td><td>Heavy, slower positioning</td></tr>
+    <tr><td>15.1 &ndash; 25 kg</td><td><strong>20 seconds</strong></td><td>Very heavy, may need hoist</td></tr>
+    <tr><td>&gt; 25 kg</td><td><strong>30 seconds</strong></td><td>Requires lifting equipment</td></tr>
+</table>
+
+<h3>Table E: Flip Time per Flip (by Bend Length)</h3>
+<table>
+    <tr><th>If Bend Length is...</th><th>Time per Flip =</th><th>Reasoning</th></tr>
+    <tr><td>&le; 500 mm</td><td><strong>3 seconds</strong></td><td>Small, quick hand flip</td></tr>
+    <tr><td>501 &ndash; 1200 mm</td><td><strong>5 seconds</strong></td><td>Medium, needs repositioning</td></tr>
+    <tr><td>1201 &ndash; 2000 mm</td><td><strong>8 seconds</strong></td><td>Large, careful rotation</td></tr>
+    <tr><td>&gt; 2000 mm</td><td><strong>12 seconds</strong></td><td>Very large, may need 2 people</td></tr>
+</table>
+
+<h3>Table F: Difficulty Factor</h3>
+<table>
+    <tr><th>Difficulty Level</th><th>Factor =</th><th>When to Use</th></tr>
+    <tr><td>Simple</td><td><strong>1.0</strong></td><td>Standard bends, normal tolerances, no special handling</td></tr>
+    <tr><td>Moderate</td><td><strong>1.2</strong> (+20%)</td><td>Some tight tolerances, multiple tool changes, awkward shape</td></tr>
+    <tr><td>Complex</td><td><strong>1.5</strong> (+50%)</td><td>Very tight tolerances, trial bends needed, reverse bends</td></tr>
+</table>
+
+<h3>Table G: Material Density (for auto weight calculation)</h3>
+<table>
+    <tr><th>Material</th><th>Density (kg/m&sup3;)</th></tr>
+    <tr><td>Mild Steel</td><td>7,850</td></tr>
+    <tr><td>Stainless Steel</td><td>8,000</td></tr>
+    <tr><td>Aluminium</td><td>2,700</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="step1"><span class="section-num">4</span> Step 1: Base Bend Time</h2>
+
+<p><strong>Purpose:</strong> Determine how many seconds one single bend takes before any modifiers are applied. Based entirely on the length of the bend.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_BaseBendTime</span>
+Case (
+  BendLength_mm &gt; 2000 ; 45 ;
+  BendLength_mm &gt; 1000 ; 30 ;
+  BendLength_mm &gt; 500  ; 20 ;
+  15
+)</div>
+
+<div class="note"><strong>Why bend length matters:</strong> A 400mm bend &mdash; the operator positions the part against the back gauge quickly. A 2500mm bend &mdash; the operator must walk along the machine, support the sheet, and ensure it doesn't sag. Hence 3&times; the time.</div>
+
+<!-- ============================================================ -->
+<h2 id="step2"><span class="section-num">5</span> Step 2: Thickness Factor</h2>
+
+<p><strong>Purpose:</strong> Thicker material requires slower ram speed, more force, and more springback compensation. This multiplier increases the bend time accordingly.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_ThicknessFactor</span>
+Case (
+  Thickness_mm &gt; 10 ; 1.50 ;
+  Thickness_mm &gt; 6  ; 1.30 ;
+  Thickness_mm &gt; 2  ; 1.15 ;
+  1.00
+)</div>
+
+<!-- ============================================================ -->
+<h2 id="step3"><span class="section-num">6</span> Step 3: V-Die Size &amp; V-Die Factor</h2>
+
+<h3>Step 3a: V-Die Size</h3>
+<p><strong>Purpose:</strong> The V-Die opening is the groove in the bottom tool. Industry standard is <strong>8 &times; material thickness</strong>. The operator can override this if a non-standard die is needed.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_VDieSize_mm</span>
+Case (
+  ManualVDie_yn = "Yes" and ManualVDie_mm &gt; 0 ; ManualVDie_mm ;
+  Thickness_mm * 8
+)</div>
+
+<div class="note"><strong>The 8&times; Rule:</strong> A 3mm thick sheet uses a 24mm V-Die (3 &times; 8 = 24). This gives the best balance of bend quality, minimum tonnage, and acceptable inside radius. A smaller V-Die gives a tighter radius but needs more tonnage. A larger V-Die reduces tonnage but produces a larger radius.</div>
+
+<h3>Step 3b: V-Die Factor</h3>
+<p><strong>Purpose:</strong> Larger V-Dies require slower ram approach and more careful alignment, adding time.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_VDieFactor</span>
+Case (
+  c_VDieSize_mm &gt; 40 ; 1.35 ;
+  c_VDieSize_mm &gt; 24 ; 1.20 ;
+  c_VDieSize_mm &gt; 12 ; 1.10 ;
+  1.00
+)</div>
+
+<!-- ============================================================ -->
+<h2 id="step4"><span class="section-num">7</span> Step 4: Bend Time per Bend</h2>
+
+<p><strong>Purpose:</strong> Combine the base bend time with both modifiers to get the actual time for one single bend.</p>
+
+<div class="formula-box">
+    <strong>Bend Time = Base Bend Time &times; Thickness Factor &times; V-Die Factor</strong>
+</div>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_BendTime</span>
+c_BaseBendTime * c_ThicknessFactor * c_VDieFactor</div>
+
+<p><strong>Example:</strong> 1600mm bend, 3mm thick, V-Die = 24mm<br>
+= 30 sec &times; 1.15 &times; 1.10 = <strong>37.95 seconds per bend</strong></p>
+
+<!-- ============================================================ -->
+<h2 id="step5"><span class="section-num">8</span> Step 5: Forming Time</h2>
+
+<p><strong>Purpose:</strong> Total time spent actively bending the part. Simply the single bend time multiplied by the number of bends.</p>
+
+<div class="formula-box">
+    <strong>Forming Time = Bend Time &times; Number of Bends</strong>
+</div>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_FormingTime</span>
+c_BendTime * NumberOfBends</div>
+
+<p><strong>Example:</strong> 37.95 &times; 4 bends = <strong>151.8 seconds</strong></p>
+
+<!-- ============================================================ -->
+<h2 id="step6"><span class="section-num">9</span> Step 6: Handling Time (Weight)</h2>
+
+<p><strong>Purpose:</strong> Heavy parts are slower to load onto the machine, position against the back gauge, and remove after bending. This adds a flat number of seconds per part.</p>
+
+<h4>Auto-Weight Calculation (if weight not manually entered)</h4>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_AutoWeight_kg</span>
+Let ( [
+  density = Case (
+    Material = "Stainless Steel" ; 8000 ;
+    Material = "Aluminium" ; 2700 ;
+    7850
+  ) ;
+  volume_m3 = ( PartLength_mm / 1000 ) * ( PartWidth_mm / 1000 ) * ( Thickness_mm / 1000 )
+] ;
+  Round ( volume_m3 * density ; 2 )
+)</div>
+
+<div class="tip"><strong>Use the higher value:</strong> If operator enters PartWeight_kg manually, use that. Otherwise use c_AutoWeight_kg. In FileMaker: <code>If ( PartWeight_kg &gt; 0 ; PartWeight_kg ; c_AutoWeight_kg )</code></div>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_HandlingTime</span>
+Let ( w = If ( PartWeight_kg &gt; 0 ; PartWeight_kg ; c_AutoWeight_kg ) ;
+  Case (
+    w &gt; 25 ; 30 ;
+    w &gt; 15 ; 20 ;
+    w &gt; 10 ; 10 ;
+    w &gt; 5  ; 5 ;
+    0
+  )
+)</div>
+
+<!-- ============================================================ -->
+<h2 id="step7"><span class="section-num">10</span> Step 7: Flip Time</h2>
+
+<p><strong>Purpose:</strong> When bends go in different directions (e.g., up then down), the operator must flip the part. Longer parts are harder to flip. Time = number of flips &times; time per flip.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_FlipTime</span>
+Let ( flipTimePer = Case (
+    BendLength_mm &gt; 2000 ; 12 ;
+    BendLength_mm &gt; 1200 ; 8 ;
+    BendLength_mm &gt; 500  ; 5 ;
+    3
+  ) ;
+  FlipsPerPart * flipTimePer
+)</div>
+
+<p><strong>Example:</strong> 2 flips on a 1600mm part = 2 &times; 8 = <strong>16 seconds</strong></p>
+
+<!-- ============================================================ -->
+<h2 id="step8"><span class="section-num">11</span> Step 8: Box / Complex Geometry Penalty</h2>
+
+<p><strong>Purpose:</strong> When forming a box (4-sided tray) or complex shape, the last bend is significantly harder because the already-formed sides block access to the die. The operator must tilt the part, the back gauge cannot reach, and the ram must approach slowly to avoid crushing the walls.</p>
+
+<p><strong>The penalty is 50% of one modified bend time</strong>, applied only for Box and Complex geometry types.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_BoxPenalty</span>
+Case (
+  GeometryType = "Box" or GeometryType = "Complex" ;
+    c_BendTime * 0.5 ;
+  0
+)</div>
+
+<p><strong>Example:</strong> Geometry = "Box", Bend Time = 37.95 sec<br>
+Box Penalty = 37.95 &times; 0.5 = <strong>18.975 seconds</strong></p>
+
+<div class="note"><strong>Geometry types that do NOT get the penalty:</strong> Flange, Channel, Hat, Z-Bend. These have open access on the last bend.</div>
+
+<!-- ============================================================ -->
+<h2 id="step9"><span class="section-num">12</span> Step 9: Part Time (Subtotal)</h2>
+
+<p><strong>Purpose:</strong> Sum all the time components into a single subtotal before applying difficulty and operator multipliers.</p>
+
+<div class="formula-box">
+    <strong>Part Time = Forming Time + Handling Time + Flip Time + Box Penalty</strong>
+</div>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_PartTime</span>
+c_FormingTime + c_HandlingTime + c_FlipTime + c_BoxPenalty</div>
+
+<!-- ============================================================ -->
+<h2 id="step10"><span class="section-num">13</span> Step 10: Difficulty Multiplier</h2>
+
+<p><strong>Purpose:</strong> An overall complexity multiplier that accounts for factors beyond pure geometry &mdash; tight tolerances requiring test bends, awkward part shapes that slow the operator, or multiple tool setups.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_DifficultyFactor</span>
+Case (
+  DifficultyLevel = "Complex"  ; 1.5 ;
+  DifficultyLevel = "Moderate" ; 1.2 ;
+  1.0
+)</div>
+
+<div class="formula-box">
+    <strong>Adjusted Time = Part Time &times; Difficulty Factor</strong>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="step11"><span class="section-num">14</span> Step 11: Second Operator Rule</h2>
+
+<p><strong>Purpose:</strong> If the part is too heavy (&gt;15 kg) or too long (&gt;2000 mm), a second operator is required for safety. This doubles the labour cost because two people's time is being used.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_OperatorMultiplier</span>
+Let ( w = If ( PartWeight_kg &gt; 0 ; PartWeight_kg ; c_AutoWeight_kg ) ;
+  Case (
+    w &gt; 15 or BendLength_mm &gt; 2000 ; 2 ;
+    1
+  )
+)</div>
+
+<div class="formula-box">
+    <strong>Total Labour Time = Adjusted Time &times; Operator Multiplier</strong><br>
+    = (Part Time &times; Difficulty Factor) &times; Operator Multiplier
+</div>
+
+<!-- ============================================================ -->
+<h2 id="step12"><span class="section-num">15</span> Step 12: Final Seconds per Part</h2>
+
+<p><strong>Purpose:</strong> Add packing time and apply the efficiency buffer to get the absolute final seconds per part.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_FinalSecondsPerPart</span>
+Let ( [
+  adjustedTime = c_PartTime * c_DifficultyFactor ;
+  labourTime = adjustedTime * c_OperatorMultiplier ;
+  withPacking = labourTime + PackingTime_sec ;
+  effFactor = 1 + ( EfficiencyFactor_pct / 100 )
+] ;
+  // If manual override is set, use it. Otherwise use calculated value.
+  Case (
+    SecondsOverride &gt; 0 ; SecondsOverride ;
+    withPacking * effFactor
+  )
+)</div>
+
+<div class="warning"><strong>Override Note:</strong> If <code>SecondsOverride</code> has a value greater than 0, the entire 12-step calculation is bypassed and the override value is used directly. This is for repeat jobs where the exact time is known from previous production.</div>
+
+<!-- ============================================================ -->
+<h2 id="cost"><span class="section-num">16</span> Cost Calculation (Dollars)</h2>
+
+<h3>Setup Cost</h3>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_SetupCost</span>
+Let ( setupHours = Case (
+    SetupUnit = "Hours" ; SetupTime ;
+    SetupTime / 60
+  ) ;
+  Round ( setupHours * HourlyRate ; 2 )
+)</div>
+
+<p><strong>Example:</strong> 45 minutes &divide; 60 = 0.75 hours &times; $100 = <strong>$75.00</strong></p>
+
+<h3>Labour Cost per Part (before setup)</h3>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_LabourCostPerPart</span>
+Round ( ( c_FinalSecondsPerPart / 3600 ) * HourlyRate ; 2 )</div>
+
+<h3>Cost per Part (with setup distributed)</h3>
+
+<div class="formula-box">
+    <strong>Cost per Part = Labour Cost per Part + (Setup Cost &divide; Quantity)</strong>
+</div>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_CostPerPart</span>
+Round ( c_LabourCostPerPart + ( c_SetupCost / Quantity ) ; 2 )</div>
+
+<p><strong>Key concept:</strong> Setup cost is paid once regardless of quantity. Making 10 parts? Each part carries $7.50 of setup. Making 1000 parts? Each carries only $0.075.</p>
+
+<!-- ============================================================ -->
+<h2 id="markups"><span class="section-num">17</span> Optional Markups</h2>
+
+<p>Four optional checkboxes that add percentage markups to the total. They are <strong>cumulative</strong> (they add together, not compound).</p>
+
+<table>
+    <tr><th>Checkbox</th><th>Markup</th><th>When to Tick</th></tr>
+    <tr><td>Stainless Steel</td><td>+15%</td><td>Material is stainless &mdash; harder on tooling, more springback</td></tr>
+    <tr><td>Complex Bends</td><td>+10%</td><td>Compound angles, acute bends, bends near holes</td></tr>
+    <tr><td>Multiple Setups</td><td>+15%</td><td>Part requires changing tools partway through the run</td></tr>
+    <tr><td>Tight Tolerance</td><td>+10%</td><td>Customer needs tighter than &plusmn;1mm</td></tr>
+</table>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_MarkupPercent</span>
+  If ( Markup_Stainless = "Yes" ; 15 ; 0 )
++ If ( Markup_ComplexBends = "Yes" ; 10 ; 0 )
++ If ( Markup_MultiSetup = "Yes" ; 15 ; 0 )
++ If ( Markup_TightTolerance = "Yes" ; 10 ; 0 )</div>
+
+<h3>Final Total Cost</h3>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_TotalCost</span>
+Let ( [
+  baseCost = c_CostPerPart * Quantity ;
+  markupMultiplier = 1 + ( c_MarkupPercent / 100 )
+] ;
+  Round ( baseCost * markupMultiplier ; 2 )
+)</div>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_FinalCostPerPart (after markup)</span>
+Round ( c_TotalCost / Quantity ; 2 )</div>
+
+<!-- ============================================================ -->
+<h2 id="override"><span class="section-num">18</span> Manual Override</h2>
+
+<p>The <code>SecondsOverride</code> field allows the operator to bypass the entire 12-step calculation. If this field contains a value greater than 0, that value is used as the seconds per part directly.</p>
+
+<p><strong>When to use:</strong> Repeat jobs where production has been timed before. For example: "We made this part last month and it took exactly 45 seconds each."</p>
+
+<p>This is already handled in the <code>c_FinalSecondsPerPart</code> formula above (the Case statement checks for SecondsOverride first).</p>
+
+<!-- ============================================================ -->
+<h2 id="tooling"><span class="section-num">19</span> Tooling Calculations</h2>
+
+<p>These are reference calculations that help the operator select the right tooling. They do not affect the cost.</p>
+
+<h3>V-Die Size</h3>
+<div class="fm-calc">
+<span class="label">c_VDieSize_mm (already defined in Step 3a)</span>
+Thickness_mm * 8    (or manual override)</div>
+
+<h3>Minimum Flange Length</h3>
+<p>The shortest flange the part can have without slipping into the die.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_MinFlange_mm</span>
+Round ( c_VDieSize_mm * 0.7 ; 1 )</div>
+
+<p><strong>Example:</strong> V-Die = 24mm &times; 0.7 = <strong>16.8mm</strong> minimum flange</p>
+
+<h3>Required Tonnage</h3>
+<p>The force needed to bend the material. Must not exceed machine capacity.</p>
+
+<div class="fm-calc">
+<span class="label">FileMaker Calculation &mdash; c_Tonnage</span>
+Let ( [
+  matFactor = Case (
+    Material = "Stainless Steel" ; 1.42 ;
+    Material = "Aluminium" ; 0.50 ;
+    1.00
+  ) ;
+  // Standard tonnage formula: (factor x thickness^2 x bend length) / V-die / 1000
+  tonnageKN = ( matFactor * Thickness_mm * Thickness_mm * BendLength_mm ) / c_VDieSize_mm ;
+  tonnageT = tonnageKN / 1000 * 9.81
+] ;
+  Round ( tonnageT ; 1 )
+)</div>
+
+<div class="note"><strong>Note:</strong> This is an approximation. Actual tonnage depends on bend angle, material grade, and tooling profile. Always verify against the machine's tonnage chart.</div>
+
+<!-- ============================================================ -->
+<h2 id="qtybreaks"><span class="section-num">20</span> Quantity Price Breaks</h2>
+
+<p>To show customers how the price drops with higher quantities. The only variable is how the <strong>setup cost is distributed</strong> &mdash; the labour per part stays the same.</p>
+
+<div class="formula-box">
+    <strong>Price per Part at Qty Q = Labour Cost per Part + (Setup Cost &divide; Q)</strong><br>
+    <strong>Total at Qty Q = Price per Part &times; Q</strong><br>
+    (Then apply markups if applicable)
+</div>
+
+<p>In FileMaker, create a portal or repeating calculation for each break quantity:</p>
+
+<div class="fm-calc">
+<span class="label">For each Quantity Break (e.g., 10, 50, 100, 500, 1000)</span>
+Let ( [
+  breakQty = 50 ;  // change per row
+  pricePerPart = Round ( c_LabourCostPerPart + ( c_SetupCost / breakQty ) ; 2 ) ;
+  total = Round ( pricePerPart * breakQty ; 2 ) ;
+  markupMultiplier = 1 + ( c_MarkupPercent / 100 ) ;
+  finalPerPart = Round ( pricePerPart * markupMultiplier ; 2 ) ;
+  finalTotal = Round ( finalPerPart * breakQty ; 2 )
+] ;
+  // Display: breakQty & " parts: $" & finalPerPart & " each = $" & finalTotal
+  finalPerPart
+)</div>
+
+<!-- ============================================================ -->
+<h2 id="example"><span class="section-num">21</span> Full Worked Example</h2>
+
+<p><strong>Job:</strong> 200 &times; Stainless steel trays, 1500mm bend length, 4mm thick, 6 bends, 2 flips, Box geometry, Moderate difficulty, 8kg each, 10 sec packing, 10% efficiency, $100/hr, 45 min setup. Stainless markup ticked.</p>
+
+<div class="waterfall">
+    <div class="line"><span>Step 1 &mdash; Base Bend Time (1500mm &rarr; 1001-2000mm)</span><span><strong>30 sec</strong></span></div>
+    <div class="line"><span>Step 2 &mdash; Thickness Factor (4mm &rarr; 2.1-6mm)</span><span>&times; 1.15</span></div>
+    <div class="line"><span>Step 3 &mdash; V-Die = 4 &times; 8 = 32mm &rarr; V-Die Factor (25-40mm)</span><span>&times; 1.20</span></div>
+    <div class="line line-result"><span>Step 4 &mdash; Bend Time = 30 &times; 1.15 &times; 1.20</span><span><strong>41.40 sec/bend</strong></span></div>
+    <div class="line"><span>Step 5 &mdash; Forming Time = 41.40 &times; 6 bends</span><span><strong>248.40 sec</strong></span></div>
+    <div class="line"><span>Step 6 &mdash; Handling Time (8kg &rarr; 5.1-10kg)</span><span>+ 5 sec</span></div>
+    <div class="line"><span>Step 7 &mdash; Flip Time = 2 flips &times; 8 sec (1201-2000mm)</span><span>+ 16 sec</span></div>
+    <div class="line"><span>Step 8 &mdash; Box Penalty = 41.40 &times; 0.5</span><span>+ 20.70 sec</span></div>
+    <div class="line line-result"><span>Step 9 &mdash; Part Time</span><span><strong>290.10 sec</strong></span></div>
+    <div class="line"><span>Step 10 &mdash; Difficulty: Moderate</span><span>&times; 1.2</span></div>
+    <div class="line"><span>&nbsp; &nbsp; &nbsp; Adjusted Time = 290.10 &times; 1.2</span><span><strong>348.12 sec</strong></span></div>
+    <div class="line"><span>Step 11 &mdash; 2nd Operator (8kg &lt; 15kg, 1500mm &lt; 2000mm)</span><span>&times; 1 (no)</span></div>
+    <div class="line"><span>&nbsp; &nbsp; &nbsp; + Packing</span><span>+ 10 sec</span></div>
+    <div class="line"><span>&nbsp; &nbsp; &nbsp; + Efficiency (10%)</span><span>+ 35.81 sec</span></div>
+    <div class="line line-final"><span>FINAL TIME PER PART</span><span>393.93 sec (6.57 min)</span></div>
+
+    <br>
+    <div class="line"><span>Labour per Part = (393.93 &divide; 3600) &times; $100</span><span><strong>$10.94</strong></span></div>
+    <div class="line"><span>Setup = (45 min &divide; 60) &times; $100 = $75.00 &divide; 200 parts</span><span>+ $0.38</span></div>
+    <div class="line line-result"><span>Cost per Part (before markup)</span><span><strong>$11.32</strong></span></div>
+    <div class="line"><span>Stainless Markup +15%</span><span>&times; 1.15</span></div>
+    <div class="line line-final"><span>FINAL COST PER PART</span><span>$13.02</span></div>
+    <div class="line line-final"><span>TOTAL JOB COST (200 parts)</span><span>$2,603.00</span></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="summary"><span class="section-num">22</span> Master Formula Summary</h2>
+
+<p>Print this page as a one-page reference.</p>
+
+<div class="waterfall" style="font-size: 14px; line-height: 2.2;">
+    <div class="line"><span><strong>c_BaseBendTime</strong></span><span>Case( BendLength &gt;2000=45; &gt;1000=30; &gt;500=20; else 15 )</span></div>
+    <div class="line"><span><strong>c_ThicknessFactor</strong></span><span>Case( Thickness &gt;10=1.50; &gt;6=1.30; &gt;2=1.15; else 1.00 )</span></div>
+    <div class="line"><span><strong>c_VDieSize</strong></span><span>Thickness &times; 8 (or manual override)</span></div>
+    <div class="line"><span><strong>c_VDieFactor</strong></span><span>Case( VDie &gt;40=1.35; &gt;24=1.20; &gt;12=1.10; else 1.00 )</span></div>
+    <div class="line"><span><strong>c_BendTime</strong></span><span>BaseBendTime &times; ThicknessFactor &times; VDieFactor</span></div>
+    <div class="line"><span><strong>c_FormingTime</strong></span><span>BendTime &times; NumberOfBends</span></div>
+    <div class="line"><span><strong>c_HandlingTime</strong></span><span>Case( Weight &gt;25=30; &gt;15=20; &gt;10=10; &gt;5=5; else 0 )</span></div>
+    <div class="line"><span><strong>c_FlipTime</strong></span><span>Flips &times; Case( BendLen &gt;2000=12; &gt;1200=8; &gt;500=5; else 3 )</span></div>
+    <div class="line"><span><strong>c_BoxPenalty</strong></span><span>If Box or Complex: BendTime &times; 0.5 ; else 0</span></div>
+    <div class="line"><span><strong>c_PartTime</strong></span><span>FormingTime + HandlingTime + FlipTime + BoxPenalty</span></div>
+    <div class="line"><span><strong>c_DifficultyFactor</strong></span><span>Case( Complex=1.5; Moderate=1.2; else 1.0 )</span></div>
+    <div class="line"><span><strong>c_OperatorMultiplier</strong></span><span>If Weight&gt;15 or BendLen&gt;2000: 2 ; else 1</span></div>
+    <hr style="border-top: 2px solid #1e40af; margin: 8px 0;">
+    <div class="line" style="color: #1e40af; font-weight: bold;"><span><strong>c_FinalSeconds</strong></span><span>(PartTime &times; Difficulty &times; Operators + Packing) &times; (1 + Efficiency%)</span></div>
+    <hr style="border-top: 2px solid #1e40af; margin: 8px 0;">
+    <div class="line"><span><strong>c_SetupCost</strong></span><span>(SetupTime &divide; 60) &times; HourlyRate</span></div>
+    <div class="line"><span><strong>c_LabourPerPart</strong></span><span>(FinalSeconds &divide; 3600) &times; HourlyRate</span></div>
+    <div class="line"><span><strong>c_CostPerPart</strong></span><span>LabourPerPart + (SetupCost &divide; Quantity)</span></div>
+    <div class="line"><span><strong>c_Markup%</strong></span><span>Sum of: Stainless(15) + Complex(10) + MultiSetup(15) + Tight(10)</span></div>
+    <div class="line" style="color: #166534; font-weight: bold; font-size: 16px;"><span><strong>c_TotalCost</strong></span><span>CostPerPart &times; Quantity &times; (1 + Markup%/100)</span></div>
+</div>
+
+<hr>
+<p style="text-align: center; color: #94a3b8; font-size: 12px; margin-top: 40px;">
+    Press Brake Quoting Engine v2 &bull; Nestix ERP &bull; Generated December 2025<br>
+    For FileMaker implementation by IT department
+</p>
+
+</body>
+</html>

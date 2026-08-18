@@ -1,0 +1,34 @@
+{
+  "summary": "Iter-18 verified the new Quote Notes feature end-to-end (backend + frontend E2E) AND re-verified the previous edit-load persistence fix for part_width / part_length / adjust_* flags on Quote line items. Backend pytest (4/4 PASS): POST /api/quotes with quote_notes persists (multi-line + '<hello>' special chars); GET returns identical value; PUT /api/quotes/{id} with only {quote_notes} updates the field and GET reflects it; empty quote_notes accepted; part_width=250.5 and part_length=400.75 persist on line_items[0]; adjust_stainless/adjust_complex/adjust_multi_setup/adjust_tight_tolerance=true persist inside line_items[0].processes[0] dict on GET. Frontend Playwright E2E: (1) Create Quote dialog shows data-testid='quote-notes-textarea' and accepts multi-line + <script>alert('x')</script> input; (2) Edit dialog on the backend-created quote correctly re-populates the textarea with the persisted quote_notes ('Line 1: delivery ASAP\\nLine 2: <hello> escaped?\\nLine 3: bracket [special]'); (3) View Quote dialog renders the amber Notes block under data-testid='view-quote-notes' with the notes text and shows '<hello>' as literal text (React auto-escape); (4) Print Quote opens a popup whose HTML contains &lt;hello&gt; (escaped) and no raw <hello> tag, confirming _escapeHtml() works and the notes block is injected into the print output.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_quote_notes_iter18.py",
+    "/app/test_reports/pytest/iter18.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Quotes.js is now >5900 lines. The Print HTML generator (~line 2226-2612), the PDF HTML generator (~line 2674-2893), and the huge form dialog (5000+) should be extracted into separate files (QuotePrintTemplate.jsx, QuotePdfTemplate.jsx, QuoteFormDialog.jsx). Duplication of quoteNotesHtml block between the print and PDF builders is a small DRY violation — extract a buildNotesBlock(quote, opts) helper.",
+    "QuoteLineItem model (backend/models.py:604) has no adjust_stainless/adjust_complex/adjust_multi_setup/adjust_tight_tolerance fields at line-item level. Adjustments are stored inside the free-form processes: List[dict]. That works (pydantic keeps the dict values) but there is no schema validation on those flags. If a future refactor tightens QuoteLineItem.processes to a typed Process model, these boolean flags must be added to the Process schema or the edit-load regression will re-appear.",
+    "Multi-item quote POST requires customer_name AND is_multi_item=True; single-item POST requires 7 specific fields (part_description, material_type, grade, finish, thickness, sheet_width, sheet_length). The error responses are clear (400) but the /api/quotes endpoint has two very different validation modes on the same URL — consider splitting into /api/quotes/single vs /api/quotes/multi, or moving the branch into a Pydantic discriminated union so OpenAPI docs make the contract obvious.",
+    "quote_notes has no length cap on the backend (Optional[str]). A user could paste a multi-MB string and it would be stored in Mongo and injected into print/PDF HTML. Add max_length=5000 (or similar) to the Pydantic field and enforce it in the Textarea maxLength on the frontend.",
+    "The Print popup relies on window.open() — pop-up blockers will silently break the flow. Consider a fallback to an in-page hidden iframe with window.print() so the notes still reach the paper output when popups are blocked."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_quote_notes_iter18.py (new)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (all E2E checks PASS)"},
+  "test_credentials": "admin/admin123 via POST /api/auth/login (token field: access_token)",
+  "seed_data_creation": "Test created and DELETED (204) one quote with customer_name='TEST_QuoteNotesCo' during pytest and E2E; final cleanup curl DELETE returned 204 so DB is clean.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter-18 added /app/backend/tests/test_quote_notes_iter18.py. Two important payload gotchas discovered while writing this test: (a) Multi-item POST /api/quotes requires customer_name AND is_multi_item=True in the top-level body (else 400 'Single-item quote missing required fields'); (b) line_items[].thickness must be a string (not float — 422 pydantic error) and line_items[].processes must be a list of dicts, not a list of strings; adjust_* flags live inside each process dict, NOT at the line-item root. Frontend Quotes page requires REACT_APP_BACKEND_URL to be HTTPS (mixed-content warnings appear for some timezone/settings calls but do NOT block the app). Use placeholder-based selectors on the login page (input[placeholder='Enter username'] / 'Enter password'). New Quote button label is exactly 'New Quote'. Row action icons on the Quotes list are ordered: 0=view, 1=edit, 2=duplicate, 3=refresh/status, 4=print, 5=download, 6=approve, 7=delete.",
+  "rca_notes": "N/A — no bugs found. Both the Quote Notes feature and the previous-session edit-load persistence fix for part_width/part_length/adjustment flags are working end-to-end."
+}

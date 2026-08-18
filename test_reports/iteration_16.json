@@ -1,0 +1,36 @@
+{
+  "summary": "Backend-only validation of ISO Modules registry expansion + Document Control migration + core ISO/QMS regression. 75/75 pytest tests PASSED across 4 test classes: TestIsoModulesEndpoint (32 tests: registry shape + 29 expected split Register/Form module names with correct groups + grouped structure for Quality/Safety/HR/IMS/Environment/Equipment/System), TestDocumentControlMigration (28 tests: response shape, no duplicate QMSF 14, 12 new related_module values present, 14 old labels no longer in register, QMSF 35/36 Risk & Opportunities split), TestDocumentControlCrud (2 tests: POST {form_no='QMSF 27A', related_module='Plant Hazard Audit Form', ...} → list contains new id → DELETE returns success → list no longer contains id; 404 on delete non-existent), TestRegression (12 tests: /jsas, /ncr, /risk-opportunities, /plant-hazard-checks, /near-miss, /leave-of-absence, /training-appraisals, /auth/users, /compliance/forklift, /compliance/first-aid, /settings/, POST /notifications/check-alerts all return 200). Skipped frontend per request.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/forklift-licenses & /api/first-aid-certificates", "issue": "Review request referenced these paths but actual endpoints are /api/compliance/forklift and /api/compliance/first-aid (compliance_registers_routes.py). Adjusted regression test to use the real paths — both return 200. Just a doc-mismatch in the request, no backend bug."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_doc_control_iso_modules.py",
+    "/app/test_reports/pytest/iter16_doc_control.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "iso_modules_routes.py default_form_no='QMSF 19' on Environmental Risk Assessment Register (line 71) collides with Injury Register (QMSF 19, line 47). The default_form_no is informational and live values come from Document Control register, so this is non-blocking — but it would surprise a user populating the register fresh. Consider e.g. QMSF 22 (Env Risk Assessment) or whatever the customer's ISO doc says.",
+    "Employment Application Form default_form_no='QMSF 02' (line 35) collides with ISO Audit Schedule QMSF 02 (line 28). Same risk — fix when convenient.",
+    "iso_modules_routes.ISO_MODULES has no 'Training Appraisal Form' Register entry — only the Form. Confirm with customer if a register is needed (current page list has only TA Form Register UI). Same for Leave of Absence.",
+    "document_control_routes.py allows multiple entries with the same form_no (no unique index). Migration handles dedup, but future double-POSTs of QMSF 14 would re-introduce the duplicate the user complained about. Consider a unique compound index on (form_no, related_module) or add a 409 on insert if a matching pair already exists.",
+    "document_control_routes.py POST returns the inserted doc but uses doc.pop('_id', None) AFTER insert_one mutated it — works in motor 3.x but is fragile. Safer pattern: build response dict explicitly excluding _id."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_doc_control_iso_modules.py (new)"
+  ],
+  "success_rate": {"backend": "100% (75/75)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "admin/admin123 (username field) — login successful via /api/auth/login",
+  "seed_data_creation": "Single TEST_ doc-control entry (QMSF 27A, Plant Hazard Check List, related_module='Plant Hazard Audit Form') created and deleted within the round-trip test — no residue.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite for ISO modules + doc-control migration lives at /app/backend/tests/test_doc_control_iso_modules.py. Login fixture uses {'username':'admin','password':'admin123'} on POST /api/auth/login; token field is 'token' (falls back to 'access_token'). REACT_APP_BACKEND_URL is required env (no default) — pytest run must export it from /app/frontend/.env. Real compliance endpoints are /api/compliance/forklift and /api/compliance/first-aid (NOT /api/forklift-licenses).",
+  "rca_notes": "No bugs. Migration ran cleanly: QMSF 14 deduped, 13 entries relinked to new canonical module keys, all new Register/Form split entries reachable through /api/iso-modules/modules. Strict-lookup data contract (id, form_no, title, issue, revision_date, owner, related_module) verified — no Mongo _id leakage."
+}

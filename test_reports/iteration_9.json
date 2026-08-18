@@ -1,0 +1,38 @@
+{
+  "summary": "Tested the new Internal Audit Schedule feature end-to-end. 13 pytest backend tests pass (auth gating, auto-seed defaults, /years sorted desc, PUT persistence + normalisation, duplicate clone w/ signature reset, 409/400/404 edge cases, DELETE). Frontend Playwright run passes: page loads at /quality/audit-schedule with title 'Internal Audit Schedule', year defaults to 2026, 13 default elements rendered with 6 expected priority stars, cell edits (jul=C, oct=X on row 0) persist after reload, Add/Rename element persists, priority toggle persists, delete element persists, Duplicate Year modal duplicates 2026 -> 2099 and switches the dropdown to 2099 with cloned cells. All cleanup performed (DELETE 2099/2098/2097). No bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Audit Schedule matrix", "issues": ["Element name <Input> column is narrow (~110px) so default names like 'Control of Documented Information' are clipped to 'Control of Doc' visually. Functionality unaffected (full value present in input), but a wider element column or a non-input cell with truncation+tooltip would read better."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_audit_schedule.py",
+    "/app/test_reports/pytest/pytest_audit_schedule.xml"
+  ],
+  "action_items": [
+    "Optional: widen the 'Element' column (or use a div+tooltip) so long default names aren't visually truncated.",
+    "Unrelated pre-existing bug observed in console: /api/settings/ is requested over http:// causing Mixed Content blocks on every page (not introduced by this feature, but worth fixing in services/api.js or settings service)."
+  ],
+  "critical_code_review_comments": [
+    "duplicate_schedule() spreads src into new_doc and then mutates fields; this is fine because the source was fetched with {_id:0}, so no _id leak occurs. Good.",
+    "GET /{year} auto-seeds on first access — non-idempotent semantics are intentional per the spec and the frontend re-fetches /years afterwards, so the dropdown updates.",
+    "_normalise_elements sorts by order then re-orders by index — relies on payload order field; frontend correctly re-stamps order = array index on save.",
+    "No size limit on elements / cells array — fine for a small annual doc but worth a 1k-element guard for safety."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_audit_schedule.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (all flows)"},
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Auto-seeded 2099 via GET, then cleaned. Duplicated 2026 -> 2099 via UI then DELETE'd via API. Final state: only the original 2026 schedule remains with cells cleared.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Audit Schedule feature is fully working. Backend tests in /app/backend/tests/test_audit_schedule.py can be re-run anytime; they auto-clean. The page uses standard <input> for cells, max 4 chars. There is a non-feature-related Mixed Content error for /api/settings/ that pollutes the console (http vs https) but does not break this feature.",
+  "rca of the issue": "No bugs found."
+}

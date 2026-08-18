@@ -1,0 +1,95 @@
+{
+  "summary": "Multi-item quote quantity breaks bug fix verified. Found and fixed root cause: quantity_breaks were being reset when adding line items. After fix, Quote #121 created with 2 qty breaks (50, 100) and Print Quote HTML correctly includes 'Quantity Breaks' section.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/settings/",
+        "issue": "Mixed Content error - HTTP request blocked on HTTPS page (pre-existing issue)",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/frontend/src/pages/Quotes.js"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The original fix at lines 1480-1482 (adding quantity_breaks to multi-item CREATE payload) was correct but incomplete. The root cause was that quantity_breaks were being reset when clicking 'Add Another Item' because the form reset didn't preserve quote-level data."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/Quotes.js"
+  ],
+  "success_rate": {
+    "backend": "N/A (frontend only test)",
+    "frontend": "100% - All test scenarios passed"
+  },
+  "test_credentials": {
+    "username": "admin",
+    "password": "admin123"
+  },
+  "seed_data_creation": "Created Quote #121 - Multi-item quote with 2 line items and 2 quantity breaks (50, 100)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Multi-item quote quantity breaks fix verified. Quote #121 has is_multi_item=True, qty_breaks=[{quantity:50}, {quantity:100}]. Print Quote HTML includes 'Quantity Breaks' section. The fix was to preserve quantity_breaks and show_quantity_breaks when resetting form after 'Add Another Item' click.",
+  "features_tested": {
+    "login": {
+      "status": "PASSED",
+      "details": "Login with admin/admin123 successful"
+    },
+    "navigate_to_quoting": {
+      "status": "PASSED",
+      "details": "Navigation to Quoting page works"
+    },
+    "create_multi_item_quote": {
+      "status": "PASSED",
+      "details": "Created Quote #121 with 2 line items (Test Multi-Item Part 1 - Bracket, Test Multi-Item Part 2 - Plate)"
+    },
+    "add_press_brake_process": {
+      "status": "PASSED",
+      "details": "Press Brake process added to both line items"
+    },
+    "add_quantity_breaks": {
+      "status": "PASSED",
+      "details": "Added 2 quantity breaks (50 and 100)"
+    },
+    "quantity_breaks_preserved_after_add_item": {
+      "status": "PASSED",
+      "details": "After clicking 'Add Another Item', quantity breaks are preserved (fix applied)"
+    },
+    "save_multi_item_quote": {
+      "status": "PASSED",
+      "details": "Quote #121 saved successfully with quantity_breaks in database"
+    },
+    "print_quote_includes_qty_breaks": {
+      "status": "PASSED",
+      "details": "Print Quote HTML content (13,897 chars) includes 'Quantity Breaks' section"
+    }
+  },
+  "bug_fixed": {
+    "file": "/app/frontend/src/pages/Quotes.js",
+    "issue": "Quantity breaks were being reset when clicking 'Add Another Item' because the form reset at line 1304-1310 didn't preserve quote-level data (quantity_breaks, show_quantity_breaks)",
+    "fix": "Added quantity_breaks and show_quantity_breaks to the preserved fields when resetting form after adding a line item",
+    "lines_changed": "1303-1312"
+  },
+  "rca_of_the_issue": {
+    "root_cause": "When creating a multi-item quote, clicking 'Add Another Item' resets the form to initial state. The original code only preserved customer info (customer_id, customer_name, contact_person, quote_date) but not quote-level data like quantity_breaks. This caused quantity_breaks to be reset to empty array [] after each line item was added.",
+    "reproduction_steps": [
+      "1. Login as admin",
+      "2. Navigate to Quoting page",
+      "3. Click '+ New Quote'",
+      "4. Fill in first line item with part description and quantity",
+      "5. Add a process (e.g., Press Brake)",
+      "6. Add quantity breaks (e.g., 50 and 100)",
+      "7. Click 'Add Another Item' - quantity breaks are reset to empty",
+      "8. Fill in second line item",
+      "9. Click 'Create Multi-Item Quote' - quote is saved with empty quantity_breaks"
+    ],
+    "mitigation": "Modified the form reset logic in handleAddLineItem() to preserve quantity_breaks and show_quantity_breaks along with customer info"
+  }
+}

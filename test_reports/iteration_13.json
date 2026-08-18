@@ -1,0 +1,26 @@
+{
+  "summary": "RETEST of EmployeeComplianceModal forgiving-name fix for Forklift + First Aid sections. The fix in /app/frontend/src/components/EmployeeComplianceModal.js (lines 50-54) removes the {params:{search:fullName}} server-side filter from /api/compliance/forklift and /api/compliance/first-aid calls so the modal now fetches all records and relies on the client-side sameName() token match. End-to-end verified: seeded a forklift license + first-aid cert under stored name 'John X. Tsoukalas' (with middle initial), opened John Tsoukalas's Compliance Report — Forklift Licenses card shows (1) with TEST-FL-001 visible, First Aid Certificates card shows (1 renewals · current badge) with TEST-FA-001 visible. Regression check: Nicholas Ghanakas's modal correctly shows 0 / 0 (John's records do NOT leak). Modal loaded in ~0.25 sec (well under 2 sec). Cleanup successful (both records deleted via API, fl_del=200, fa_del=200). The HIGH-priority regression flagged in iteration_12 is FIXED. All 5 review-request bullets PASS.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/frontend/src/components/EmployeeComplianceModal.js"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix is correct and minimal: removed the server-side search query param so the forgiving client-side sameName() filter applies uniformly across all three sources (forklift, first-aid, training-matrices). No further changes recommended for this bug.",
+    "Performance note (informational, not a bug): with the search param removed, the modal now downloads the full compliance/forklift and compliance/first-aid collections on every open. In preview env with 1 record per source this took ~0.25s. If those collections grow into the thousands consider adding a last-name-only server hint (e.g. ?search=Tsoukalas) and keep sameName() as the final gate."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only)", "frontend": "100% (5 of 5 review-request bullets PASS)"},
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Seeded then cleaned up: forklift license TEST-FL-001 (name='John X. Tsoukalas', id=75eb9404-62e4-466e-9730-69553d69c09f) and first-aid record (name='John X. Tsoukalas', cert TEST-FA-001, id=8c7aeea8-f9a2-470b-8555-018ae05342ba). Both DELETE responses = 200. No residual test data in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 5 EmployeeComplianceModal bullets now PASS (case-insensitive, middle initial w/wo dot, whitespace, false-positive exclusion, forgiving forklift+first-aid). Modal data-testid='employee-compliance-modal'. Open via [data-testid^=compliance-btn-] on each employee row in /employees. Login button is labeled 'Sign In' (not 'Login'). Preview env only has 3 employees (EMP-0001 John Tsoukalas, EMP-0002 Nicholas Ghanakas, EMP-0003 Peter Craciunoiu). Use page.goto(..., wait_until='domcontentloaded') — networkidle is unreliable because of a non-fatal periodic /api/settings/ Mixed-Content error.",
+  "rca of the issue": "Root cause (already mitigated by E1's fix): the previous version was sending ?search=<fullName> to /api/compliance/forklift and /api/compliance/first-aid, and the backend applied a strict substring filter on full name BEFORE the client received the data — stripping out records stored with extra tokens (middle initial). Reproduction (before fix): POST /api/compliance/forklift with name='John X. Tsoukalas'; the modal for 'John Tsoukalas' showed (0). Fix applied: drop the server-side search param entirely for these two GETs so client-side sameName() (first-token AND last-token match, case-insensitive, punctuation stripped) is the sole filter. Verified PASS in this iteration."
+}

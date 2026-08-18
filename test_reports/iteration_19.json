@@ -1,0 +1,58 @@
+{
+  "summary": "Iter-19 tested the new Courier KPI module end-to-end. Backend pytest (11/11 PASS) verified Courier CRUD (create/list/update-color/soft-delete + include_inactive), KPI entries upsert idempotency, validation (percent>100 → 400, invalid month YYYY-13 → 400), entry delete, aggregated /data (rolling window MAR-25→FEB-26 with 12 months, calendar 2025 Jan-Dec), and ISO modules registry contains 'Courier KPI' under 'Operations'. Frontend Playwright E2E verified: empty-state add-courier flow, creating JET / Toll / StarTrack, tabs render with data-testids ck-tab-JET/Toll/StarTrack, KPI entry dialog persistence (86.2/13.8/97.2/2.8 saved and averages text updates), period Rolling↔Calendar switching (ck-year input appears), comparison tab shows all 4 required chart cards (2 line + 2 bar) plus Averages Summary table listing all 3 couriers, Manage tab edit dialog pre-fills existing values, and Print popup opens with title 'Courier KPI Report' + ISO footer '—' placeholders (no crash when Document Control has no entry). One frontend defect found in Print flow (see action_items).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CourierKPI print (handlePrint)",
+        "issue": "Print button only captures Chart.js canvases currently mounted in the DOM. Because Radix Tabs unmount inactive TabsContent, printing while on the Manage or Comparison tab produces a popup with header/footer but NO per-courier chart pages (perCourierBlocks is empty). To reproduce: create couriers, add entries on JET, switch to 'Manage Couriers' tab, click Print — resulting popup shows 'No courier data available.'",
+        "selector": "[data-testid='ck-print']",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "CourierKPI Manage tab activeTab reset",
+        "issue": "After creating/editing a courier from the 'Manage Couriers' tab, fetchData() force-switches activeTab to the first courier tab (because 'manage' is not in couriers list). User has to click 'Manage Couriers' again to add another courier. In fetchData, the condition `!res.data.couriers.find(c=>c.id===activeTab)` treats non-id values ('manage','compare') as invalid and forces a switch. Should exempt 'manage' and 'compare' from that logic.",
+        "selector": "CourierKPI.js fetchData()",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Courier KPI page",
+        "issues": [
+          "DialogContent for Add/Edit Courier and KPI Entry dialogs emit React a11y warning: 'Missing Description or aria-describedby'. Add DialogDescription for screen readers."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_courier_kpi_iter19.py",
+    "/app/test_reports/pytest/iter19_courier_kpi.xml"
+  ],
+  "action_items": [
+    "Fix handlePrint() to render all courier tab contents into a hidden container (or use forceMount on TabsContent) before capturing canvases, so Print works regardless of the tab the user is currently viewing.",
+    "In fetchData(), skip the activeTab reset when activeTab is 'manage' or 'compare' so users can add multiple couriers back-to-back without re-clicking the Manage tab.",
+    "Add DialogDescription (aria-describedby) to Add/Edit Courier and KPI Entry dialogs to remove the Radix a11y warnings."
+  ],
+  "critical_code_review_comments": [
+    "handlePrint() depends on transient DOM state (canvases only exist when their TabsContent is mounted). For a print/report feature this is fragile — offscreen render or forceMount is required.",
+    "PUT /api/courier-kpi/couriers/{id} `updates` filter uses `v is not None or k == 'active'` which means passing active=None (from CourierUpdate default) still bypasses the None-filter for 'active' and could accidentally write None into the doc. Consider using exclude_unset only, or explicitly checking payload.dict(exclude_unset=True).",
+    "Backend has NO admin/role gating on any Courier KPI endpoint — any authenticated user can create/delete couriers and edit any month's KPIs. If Courier KPI is meant to be admin-controlled (as the review request implies: 'as admin'), add a role check similar to other ISO modules.",
+    "Backend duplicates the MongoDB client creation pattern (each route file re-creates AsyncIOMotorClient). Consider a shared db module. Not blocking.",
+    "prettyMonth() and _month_label() define the month-name array in two places (backend Python + frontend JS). Fine for now, but if you ever localise or change casing (e.g. 'JUL' vs 'Jul'), both must be edited together."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_courier_kpi_iter19.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "~85% (Print-button bug is the only functional miss; empty state, add courier, KPI entry, tab switching, period switching, comparison charts, manage tab edit all PASS)"},
+  "test_credentials": "admin/admin123 via POST /api/auth/login (token in `access_token` field)",
+  "seed_data_creation": "Test session created & DELETED (soft) 4 couriers (TEST_JET/Toll/StarTrack/DeleteMe) via pytest and 3 couriers (JET, Toll, StarTrack) + one KPI entry via UI. All UI+pytest data cleaned up at end — verified GET /api/courier-kpi/couriers returns empty active list.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend collections used: `couriers` and `courier_kpi_entries`. Soft-delete pattern: DELETE /couriers/{id} sets active=false; historical entries preserved. Idempotent upsert on /entries keyed by (courier_id, month). Test file /app/backend/tests/test_courier_kpi_iter19.py can be re-run any time — it creates TEST_ prefixed couriers and cleans them at teardown. Frontend selectors verified: ck-empty-add-courier, ck-tab-{name}, ck-tab-compare, ck-tab-manage, ck-add-courier (only visible on Manage tab), ck-courier-name, ck-save-courier, ck-edit-courier-{name}, ck-delete-courier-{name}, ck-entry-on-3hr/late-3hr/on-4hr/late-4hr, ck-save-entry, ck-period, ck-year, ck-end-month, ck-print. Known gotchas: (1) After saving a courier from Manage tab, activeTab resets to first courier tab — must re-click ck-tab-manage. (2) Chart.js labels are drawn on canvas, NOT in DOM text — do NOT assert on axis labels via inner_text; use screenshot or check dataset config instead. (3) Print popup only contains data for currently-mounted tab (see MEDIUM bug in action_items).",
+  "rca_of_the_issue": "Print-button-empty-when-not-on-courier-tab: root cause is Radix UI <TabsContent> unmounts by default when the tab isn't active. handlePrint() calls captureCanvas(`ck-chart-3hr-${c.id}`) which querySelectors the DOM — when the JET/Toll/StarTrack TabsContent isn't currently active, its <canvas> element does not exist, so captureCanvas returns '' and perCourierBlocks becomes empty. Fix options: (a) add forceMount to each TabsContent, (b) temporarily programmatically switch through each tab before print (bad UX), or (c) render an offscreen hidden print-only container that always mounts all charts. Option (a) is simplest."
+}

@@ -1,0 +1,34 @@
+{
+  "summary": "Backend-only validation of FormsLibrary registry-driven lookup fix + 10-entry production-like seed. 20/20 pytest tests PASSED. TestDocControlContract (5): /api/document-control returns list of 10, no Mongo _id leak, all required fields {id, form_no, title, issue, revision_date, owner, related_module} present, doc_type carried on entries enabling Form/Register disambiguation. TestEmploymentApplicationLookup (1): the user's original bug — Employment Application now resolves to QMSF 03 / Issue 3 / 2026-06-19 via related_module='Employment Application Form' (NOT the wrong QMSF 02 'Customer Satisfaction Analysis Report' row that legacy code was picking). TestJsaLegacyDisambiguation (1): legacy JSA pair (QMSF 13 Register + QMSF 14 Form, both related_module='JSA') is present and disambiguatable by doc_type, confirming findByModuleSmart's fallback path works against real legacy data. TestIsoModulesRegistry (2): /api/iso-modules/modules still returns ≥40 modules incl. JSA Register, JSA Form, NCR Register, NCR Form, Plant Hazard Audit Form, Near Miss Register, Employment Application Form. TestRegression (11): /jsas, /ncr, /risk-opportunities, /plant-hazard-checks, /near-miss, /leave-of-absence, /training-appraisals, /iso-modules/modules, /document-control, /settings/, /auth/users all return 200. Frontend skipped per request.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_doc_control_seed_iter17.py",
+    "/app/test_reports/pytest/iter17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "findByModuleSmart (documentControl.js) handles the fallback well — but if BOTH the canonical key and the legacy fallback resolve, it returns the canonical one without warning the caller about the ambiguity. Consider a dev-mode console.warn when both paths hit different rows so admins notice partial-migration drift.",
+    "Seed contains QMSF 13 (JSA Register) and QMSF 14 (JSA Form) BOTH with related_module='JSA'. The smart-lookup falls back via doc_type — works today, but as users edit the register they may accidentally swap doc_type and silently break the wrong print template. Recommend a one-time migration that rewrites related_module='JSA' rows to 'JSA Register' or 'JSA Form' based on their current doc_type, so the strict (primary) path resolves them and the fallback is reserved for truly legacy/un-touched registers.",
+    "/api/document-control has no unique compound index on (form_no, related_module). A double-POST would re-introduce the duplicate-QMSF problem the user originally reported. Add the unique index (or a 409 guard on insert).",
+    "The seed only contains 10 rows but iso-modules/modules advertises 40+ split keys — for any module without a register row the print footer will show '—' dashes. That's an acceptable degraded state per documentControl.js comment, but main agent should make sure the UI surfaces a visible 'Registry entry missing for <module>' hint in admin/Document Control so users know what to populate.",
+    "EmploymentApplication's fallback_module='Employment Application' (added to the form definition) is not present anywhere in the current 10-row seed. The strict primary key 'Employment Application Form' resolves to QMSF 03 directly, so the fallback is untested against this seed — fine for THIS bug but worth noting for future regression: a register that ONLY has the legacy 'Employment Application' row would need the fallback path to actually kick in."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_doc_control_seed_iter17.py (new)"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "admin/admin123 (username field) via POST /api/auth/login",
+  "seed_data_creation": "No new seed created by this test run — verified the existing 10-row production-like seed already present in MongoDB (QMSF 01/02 Customer Satisfaction*, QMSF 03 Employment Application Form, QMSF 04 NCR Register, QMSF 05 NCR Form, QMSF 11 Supplier Review, QMSF 12 Training Matrix, QMSF 13 JSA Register, QMSF 14 JSA Form, QMSF 15 OHS Meetings).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter-17 added /app/backend/tests/test_doc_control_seed_iter17.py focused on the FormsLibrary QMSF lookup fix. It complements (does not replace) test_doc_control_iso_modules.py from iter-16. Both can be run together: `pytest backend/tests/ -v`. Login fixture: POST /api/auth/login with {'username':'admin','password':'admin123'}; token field is 'token' (falls back to 'access_token'). REACT_APP_BACKEND_URL must be exported from /app/frontend/.env. The 10-row seed described under 'seed_data_creation' is the data contract the FormsLibrary frontend relies on — if a future migration removes the legacy 'JSA' related_module rows, the TestJsaLegacyDisambiguation test must be updated accordingly.",
+  "rca_notes": "Original user bug verified fixed at the data layer: Employment Application Form correctly resolves to QMSF 03/Issue 3/19-06-2026 via the new related_module='Employment Application Form' canonical key. The previous bug was caused by getControlledDocumentByFormOrModule('QMSF 02', 'Employment Application') matching QMSF 02 first (which in the user's real register belonged to Customer Satisfaction Analysis Report). The new getControlledDocumentByModule(primary, {fallback, docType}) flow eliminates that misuse by matching on related_module only. Confirmed backend API contract unchanged — fix is entirely frontend (FormsLibrary + employmentApplication.js + documentControl.js helpers)."
+}

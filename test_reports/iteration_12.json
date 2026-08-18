@@ -1,0 +1,36 @@
+{
+  "summary": "Verified the EmployeeComplianceModal name-matching bug-fix (frontend only). The tokens()/sameName() helper logic was unit-tested with 14 cases (case-insensitive, punctuation, middle initial w/wo dot, whitespace, false-positive prevention) and ALL 14 passed. End-to-end UI testing using the seeded training matrix 'TEST_MIDDLENAME_MATRIX' confirmed: (a) Training Matrix Records section now matches 'JOHN X. TSOUKALAS' against employee 'John Tsoukalas' and renders the rows, (b) Multi-middle name 'PETER A B CRACIUNOIU' matches 'Peter Craciunoiu', (c) Nicholas Ghanakas (no matrix entry) correctly shows 0, (d) False-positive foils 'John Doe' and 'Mary Tsoukalas' are correctly EXCLUDED from John Tsoukalas's report, (e) John X. Tsoukalas's records do NOT leak into Peter's modal. HOWEVER one regression remains: the forgiving match does NOT apply to Forklift Licenses or First Aid Certificates because those API calls send {params:{search: fullName}} and the backend pre-filters by strict substring on full name BEFORE the client-side sameName() filter runs. The seeded forklift license 'John X. Tsoukalas' was correctly returned 200 by the API but was filtered out server-side and never reached the modal (John FL=0/1).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "EmployeeComplianceModal",
+        "issue": "Forgiving name match is NOT applied to Forklift Licenses or First Aid Certificates. The frontend sends ?search=<fullName> to /api/compliance/forklift and /api/compliance/first-aid which strict-substring-filters server-side. A forklift license stored as 'John X. Tsoukalas' is excluded before sameName() can see it, so the Compliance Report for 'John Tsoukalas' shows 0 forklift licenses. Verified by seeding TEST-FL-001 with name 'John X. Tsoukalas' via POST /api/compliance/forklift (status 200) — modal still shows '(0)' for John Tsoukalas. Fix: drop the search param for these two calls (fetch all & client-filter, mirroring the training-matrices approach), OR pass only the first token e.g. params.search='Tsoukalas' (last name) and keep client-side sameName as the final gate.",
+        "selector": "[data-testid='employee-compliance-modal'] section: Forklift Licenses / First Aid Certificates",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/frontend/src/components/EmployeeComplianceModal.js"],
+  "action_items": [
+    "Fix EmployeeComplianceModal.js so that Forklift Licenses and First Aid Certificates also benefit from forgiving name match. Easiest: remove the {params:{search: fullName}} on lines 48-49 and rely entirely on the client-side .filter(x => sameName(x.name)). Alternatively send only the last-name token. Re-test by seeding a forklift license with a middle-initial name and confirming the compliance modal for the no-middle-initial employee shows it."
+  ],
+  "critical_code_review_comments": [
+    "EmployeeComplianceModal.js line 47-49: server-side `search` param defeats the new forgiving match for compliance/forklift and compliance/first-aid endpoints.",
+    "Line 77 uses `.find()` which only returns the first matching person row per matrix. If a matrix happened to list the same person twice (e.g. once with and once without middle initial) only the first occurrence's scores would be aggregated. Likely acceptable in practice but worth a code comment.",
+    "Forklift/First-Aid search param strips out partial matches before client sees them — same root cause as the original Training Matrix bug, just at a different boundary."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only)", "frontend": "80% (4 of 5 review-request bullets PASS; bullet #4 - forklift forgiving match - FAILS)"},
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Seeded via API and cleaned up: (1) training matrix 'TEST_MIDDLENAME_MATRIX' with 5 people incl. JOHN X. TSOUKALAS, '  john tsoukalas  ', John Doe, Mary Tsoukalas, PETER A B CRACIUNOIU and 2 skills (Laser Cutting / Press Brake) — DELETE 200. (2) forklift license TEST-FL-001 for 'John X. Tsoukalas' — DELETE 200. No residual test data.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Preview env only has 3 employees (EMP-0001 John Tsoukalas, EMP-0002 Nicholas Ghanakas, EMP-0003 Peter Craciunoiu). No Kiran Satheesh / Zeljko Brekic in this env — seed via /api/training-matrices and /api/compliance/forklift using admin token from localStorage.currentUser.token. Compliance modal opens via [data-testid^=compliance-btn-]. The 14-case sameName() unit test is reproducible via page.evaluate; copy the tokens()/sameName() snippet directly from EmployeeComplianceModal.js lines 58-69.",
+  "rca of the issue": "The bug-fix correctly replaces the strict equality check (`norm(x.name) === me`) on the Training Matrix branch with a forgiving token-based comparison. The training-matrices endpoint returns full data so the client can re-filter — this works. But for forklift & first-aid, the frontend still sends ?search=<fullName> which causes the backend to apply a strict substring filter, removing middle-name variants BEFORE sameName() runs. Reproduction: as admin, POST /api/compliance/forklift with name='John X. Tsoukalas'; then open the Employee Compliance modal for 'John Tsoukalas' — Forklift Licenses shows (0). Mitigation: stop sending the search query for these two GETs (or send only the last-name token) and let sameName() be the sole filter."
+}

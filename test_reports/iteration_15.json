@@ -1,0 +1,44 @@
+{
+  "summary": "Tested 3 new HSE/HR forms (Near Miss QMSF 32, Training Appraisal QMSF 08, Leave of Absence QMSF 12) backend + frontend and PHC Risk Heatmap. All 10 backend pytest tests PASSED (reference endpoints, auto-incrementing counters, full CRUD with persistence checks, stats, auth required, default Pending status/date_of_request). Frontend: heatmap renders all 25 cells with correct data-testid grid (phc-heatmap-c<1-5>-l<A-E>); after creating a PHC with hazards (c=5,l=C) and (c=2,l=B), the matching cells correctly showed count=1 while all others remained 0, and after delete they reset to 0. Forms register pages (nm-page, ta-page, loa-page), QMSF badges, 4 stat cards each, Print Blank Form (window.open triggered), New Report flow, fill+save with auto-prefix (NM-001/TA-001/LOA-001 style), edit, and print all work. Test data cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "NearMissRegister.js", "issue": "Missing data-testid='nm-status' on status <select> inside form — review request expected to assert status change", "selector": "[data-testid=nm-status]", "priority": "MEDIUM"},
+      {"component": "NearMissRegister.js", "issue": "Delete button on register row has no data-testid (e.g., nm-delete-<id>) — request mentioned deleting record", "selector": "row delete button", "priority": "LOW"},
+      {"component": "TrainingAppraisal.js", "issue": "Delete button on register row has no data-testid='ta-delete-<id>'", "selector": "row delete button", "priority": "LOW"},
+      {"component": "LeaveOfAbsence.js", "issue": "Delete button on register row has no data-testid='loa-delete-<id>'", "selector": "row delete button", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All pages (global)", "issues": ["Mixed-content console errors: axios calls to /api/settings/ hit http:// instead of https:// — pre-existing in app, not in scope of this iteration but worth flagging in settings axios client"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_safety_hr_forms.py",
+    "/app/test_reports/pytest/pytest_new_safety_hr.xml"
+  ],
+  "action_items": [
+    "Add data-testid='nm-status' to status <select> in Near Miss form (NearMissRegister.js)",
+    "Add data-testid='nm-delete-<id>' / 'ta-delete-<id>' / 'loa-delete-<id>' to row Trash2 buttons for automated coverage",
+    "(Optional) Fix mixed-content http -> https for /api/settings call in the global axios client — affects all pages console noise"
+  ],
+  "critical_code_review_comments": [
+    "Counter collection 'ncr_counters' is shared across NCR, NM, TA, LOA, PHC etc — this is fine because each uses a unique _id key (near_miss_no/training_appraisal_no/loa_no), but consider renaming to a neutral name like 'sequence_counters' for clarity.",
+    "All three new routers correctly: use uuid.uuid4() ids, project out _id from queries, use timezone-aware UTC ISO timestamps, validate via Pydantic, and gate every endpoint behind get_current_user. Good practice.",
+    "training_appraisal stats total_hours aggregation handles None correctly via 'or 0'.",
+    "Leave of Absence sets date_of_request to today only when missing — good default behavior."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_safety_hr_forms.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "~95% (heatmap + all 3 form registers/forms/print/save/edit verified; row-delete testids absent but delete functionally works via Trash2 button + confirm)"},
+  "test_credentials": "admin/admin123 via 'username' field — confirmed working",
+  "seed_data_creation": "Test records created and deleted within tests (TEST_NM, TEST_TA, TEST_LOA prefixed). PHC test record also created & deleted. Stats baseline restored.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest test_new_safety_hr_forms.py covers all 3 new modules. PHC heatmap verified by creating a PHC via API with hazards (c=5,l=C) and (c=2,l=B), reloading page, asserting [data-testid=phc-heatmap-c5-lC]=1 and c2-lB=1, then deleting. window.open print stubs must include document.open in the stub: returning { document: { open:()=>{}, write:()=>{}, close:()=>{} } } — the printOne helper calls w.document.open() and crashes on a bare stub. Note: localStorage token key is 'token' (or 'access_token') — verify before reusing in browser.",
+  "rca_notes": "No bugs requiring fix — all features working. Only testability gaps (a few missing data-testid on inline action buttons and status select) noted as action items."
+}

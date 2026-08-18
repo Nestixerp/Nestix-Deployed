@@ -1,0 +1,32 @@
+{
+  "summary": "Completed backend + frontend testing of new NCR Register module (QMSF 03). 25/25 backend pytest tests passed. Frontend end-to-end flow verified: register page, stat widgets, NCR create with credit request + NCR job sheet modals, save, list/tag rendering, date-range search, Credit Requests log page, department picklist add, print-NCR popup (QMSF 03 confirmed). Concerns counter increments correctly. All TEST_ data and counters cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "NCR Register filters", "issues": ["Date From / Date To use the browser-native HTML date input (mm/dd/yyyy) instead of the shadcn Calendar/Popover component used elsewhere in the app — inconsistent UX."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ncr_register.py",
+    "/app/test_reports/pytest/pytest_ncr.xml"
+  ],
+  "action_items": [
+    "(Optional / design) Replace native <input type='date'> on /quality/ncr Date From / Date To with the shadcn Calendar component for visual consistency with other modules.",
+    "Note: backend tests + first FE save consumed ncr_no counter so first FE NCR was created as NCR #4 (not #1). The spec only requires auto-increment behaviour, which is verified. If the user wants the very first FE-created NCR to be #1, the ncr_counters collection must be reset between backend-test and frontend-test phases (the testing-agent rebaseline already cleared the documents but the counter doc was not reset). Behaviour is correct; flagging for awareness only."
+  ],
+  "critical_code_review_comments": [
+    "ncr_routes.py — route ordering is correct: /stats and /departments are declared before /{ncr_id}, verified by tests (return 200, not 404).",
+    "ncr_routes.py uses uuid id field and excludes _id via projection — good. Atomic counter via find_one_and_update with $inc — safe for concurrent inserts.",
+    "_persist_credit_request_log upserts on ncr_id and DELETE /ncr/{id} cascades to credit_requests collection — verified by tests.",
+    "Stats /api/ncr/stats issues 30+ count_documents queries (12 months x 2 categories + this-month + ytd + range). For 12,580 legacy records, consider an index on (category, date_raised) to keep page-load fast."
+  ],
+  "updated_files": ["/app/backend/tests/test_ncr_register.py"],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "100% of in-scope flows verified"},
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 2 NCRs (TEST_ACME Corp NCR with credit+job sheet, TEST_Beta Inc Concern) during FE flow + 1 TEST_DeleteMe during backend test — ALL cleaned up. Default 11 departments restored to ncr_departments. credit_requests collection empty. ncr_counters not reset (counter ended at 5).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file at /app/backend/tests/test_ncr_register.py is idempotent and self-cleans. Frontend flows confirmed working: NCRRegister listing + stats + date-range search + Credit Requests Log link; NCRForm full lifecycle with credit_request modal + NCR job sheet modal + department picklist + Print NCR popup (QMSF 03). Print Credit Request and Print NCR Job Sheet were not verified by popup capture because the test happened to land on the Concern row which had no credit/recut enabled — buttons f-credit-print / f-recut-print only render when those toggles are on (expected behaviour). The Print NCR (QMSF 03) popup was confirmed end-to-end. ncr_counters is not zeroed by the test suite — if the user wants a fresh sequence, manually clear that collection in mongo."
+}
