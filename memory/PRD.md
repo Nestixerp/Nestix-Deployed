@@ -1044,3 +1044,6 @@ Admin password reset already implemented: System → User Management → "Reset 
 
 ### RFQ Supplier Price Comparison printout (Aug 2026) — DONE ✅ (verified via rendered PDF)
 GET /api/rfqs/{id}/export/pdf — one-page ReportLab comparison: rows = items (code/description/size/qty), columns = each supplier's price; cheapest comparable price per line highlighted green (alternatives counted); ALT/N/A notation; supplier contacts + notes footer; auto landscape when >3 suppliers. Printer button (data-testid print-comparison-{rfq_number}) on each RFQs row, disabled until responses exist. Needs redeploy.
+
+### RFQ offline email-attachable form (Aug 2026) — DONE ✅ (E2E tested from file:// incl. CORS submit)
+For suppliers whose cyber-security blocks links: new FileDown button per RFQ row downloads a SELF-CONTAINED HTML enquiry form (GET /api/rfqs/{id}/export/html?origin=<browser origin> — origin passed explicitly because proxy mangles headers). User attaches it to their work email; supplier opens locally, fills company (required)/prices/alternative sizes, clicks Submit → posts to public respond API (verified working from file:// with Origin:null CORS). Failure message tells supplier to reply by email. Needs redeploy.

@@ -4,7 +4,7 @@ suppliers via a public link (no email integration needed, like customer surveys)
 Auth:   POST/GET /api/rfqs, GET /api/rfqs/{id}, PUT /api/rfqs/{id}/status, DELETE /api/rfqs/{id}
 Public: GET /api/rfqs/public/{token}, POST /api/rfqs/public/{token}/respond
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -231,6 +231,103 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
     fname = f"{rfq.get('rfq_number')}_Price_Comparison.pdf"
     return StreamingResponse(buf, media_type="application/pdf",
                              headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
+@router.get("/{rfq_id}/export/html")
+async def export_offline_html(rfq_id: str, request: Request, origin: Optional[str] = None,
+                              current_user=Depends(get_current_user)):
+    """Self-contained HTML enquiry form to ATTACH to an email — for suppliers whose
+    cyber-security blocks external links. Opens locally; Submit posts to our public API."""
+    from fastapi.responses import Response as FastResponse
+    rfq = await db[RFQS].find_one({"id": rfq_id}, {"_id": 0})
+    if not rfq:
+        raise HTTPException(404, "RFQ not found")
+    company = await db.company_settings.find_one({}, {"_id": 0}) or {}
+    if not origin:
+        origin = request.headers.get('origin')
+    if not origin:
+        fwd_host = request.headers.get('x-forwarded-host')
+        proto = request.headers.get('x-forwarded-proto', 'https')
+        origin = f"{proto}://{fwd_host}" if fwd_host else str(request.base_url).rstrip('/')
+    base = origin.rstrip('/')
+    if base.startswith('http://') and 'localhost' not in base:
+        base = 'https://' + base[7:]
+    submit_url = f"{base}/api/rfqs/public/{rfq['public_token']}/respond"
+    co = company.get('company_name', '')
+    esc = lambda s: (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+    items_html = ""
+    for i, it in enumerate(rfq.get('items', [])):
+        items_html += f"""
+    <div class="item" data-id="{it['id']}">
+      <div class="row1"><b>{i + 1}. {esc(it.get('description'))}</b>
+        <span class="meta">{('Code: ' + esc(it.get('code')) + ' · ') if it.get('code') else ''}{('Material: ' + esc(it.get('material_type')) + ' · ') if it.get('material_type') else ''}{('Size: ' + esc(it.get('size')) + ' · ') if it.get('size') else ''}Qty: {it.get('quantity')}</span>
+      </div>
+      <label>Your Price (ea, ex GST) $ <input type="number" step="0.01" min="0" class="price"></label>
+      <label><input type="checkbox" class="na"> Size not available</label>
+      <label><input type="checkbox" class="altchk" onchange="this.closest('.item').querySelector('.altbox').style.display=this.checked?'block':'none'"> Offer alternative size</label>
+      <div class="altbox" style="display:none">
+        <label>Alternative size <input type="text" class="altsize" placeholder="e.g. 3.0 x 3000 x 1500"></label>
+        <label>Alternative price $ <input type="number" step="0.01" min="0" class="altprice"></label>
+      </div>
+      <label>Notes <input type="text" class="inotes" placeholder="lead time, MOQ, etc."></label>
+    </div>"""
+
+    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>{esc(rfq.get('rfq_number'))} — Material Enquiry from {esc(co)}</title>
+<style>
+ body{{font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;margin:0;padding:20px}}
+ .card{{max-width:760px;margin:0 auto 14px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px}}
+ h1{{font-size:19px;margin:0 0 4px}} .sub{{color:#555;font-size:13px;margin:0 0 6px}}
+ label{{display:block;font-size:13px;margin:6px 0}} input[type=text],input[type=number],input[type=email],textarea{{width:100%;max-width:420px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:14px;box-sizing:border-box}}
+ input[type=checkbox]{{width:auto;margin-right:6px}}
+ .item{{border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;margin:10px 0;background:#f8fafc}}
+ .meta{{display:block;font-size:12px;color:#555;font-weight:normal}}
+ .altbox{{background:#fffbeb;border:1px solid #fcd34d;border-radius:5px;padding:8px;margin:6px 0}}
+ button{{background:#166534;color:#fff;border:0;border-radius:6px;padding:12px 22px;font-size:15px;cursor:pointer;width:100%}}
+ .err{{color:#b91c1c;font-size:13px;margin:8px 0}} .ok{{text-align:center;padding:30px 10px}}
+ .req{{color:#b91c1c}}
+</style></head><body>
+<div class="card"><h1>{esc(co)} — Material Purchasing Enquiry</h1>
+<p class="sub">{esc(rfq.get('rfq_number'))} · {esc(rfq.get('title'))}{(' · Pricing required by ' + esc(rfq.get('required_by'))) if rfq.get('required_by') else ''}</p>
+{('<p class="sub">' + esc(rfq.get('notes')) + '</p>') if rfq.get('notes') else ''}
+<p class="sub">Fill in your prices below and click <b>Submit Pricing</b> (requires internet). If submission fails, simply reply to our email with your prices.</p></div>
+<div class="card"><b>Your details</b>
+ <label>Company Name <span class="req">*</span> <input type="text" id="s_company"></label>
+ <label>Contact Name <input type="text" id="s_contact"></label>
+ <label>Email <input type="email" id="s_email"></label>
+ <label>Phone <input type="text" id="s_phone"></label></div>
+<div class="card"><b>Items</b>{items_html}
+ <label>General notes / terms <textarea id="s_notes" rows="3"></textarea></label>
+ <div class="err" id="err"></div>
+ <button onclick="submitPricing()">Submit Pricing</button></div>
+<script>
+async function submitPricing(){{
+  var err=document.getElementById('err'); err.textContent='';
+  var company=document.getElementById('s_company').value.trim();
+  if(!company){{err.textContent='Please enter your company name.';return;}}
+  var items=[].map.call(document.querySelectorAll('.item'),function(el){{
+    return {{item_id:el.dataset.id,
+      price:el.querySelector('.price').value?parseFloat(el.querySelector('.price').value):null,
+      available:!el.querySelector('.na').checked,
+      alternative_size:el.querySelector('.altchk').checked?el.querySelector('.altsize').value:'',
+      alternative_price:(el.querySelector('.altchk').checked&&el.querySelector('.altprice').value)?parseFloat(el.querySelector('.altprice').value):null,
+      notes:el.querySelector('.inotes').value}};
+  }});
+  var payload={{supplier_company:company,contact_name:document.getElementById('s_contact').value,
+    email:document.getElementById('s_email').value,phone:document.getElementById('s_phone').value,
+    overall_notes:document.getElementById('s_notes').value,items:items}};
+  try{{
+    var r=await fetch('{submit_url}',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});
+    if(!r.ok){{var d=await r.json().catch(function(){{return {{}}}});throw new Error(d.detail||('HTTP '+r.status));}}
+    document.body.innerHTML='<div class="card ok"><h1>✔ Pricing Submitted</h1><p class="sub">Thank you — {esc(co)} has received your pricing for {esc(rfq.get('rfq_number'))}.</p></div>';
+  }}catch(e){{
+    err.textContent='Could not submit automatically ('+e.message+'). Your network may block this — please reply to our email with your prices instead.';
+  }}
+}}
+</script></body></html>"""
+    fname = f"{rfq.get('rfq_number')}_Material_Enquiry.html"
+    return FastResponse(content=html, media_type="text/html",
+                        headers={"Content-Disposition": f"attachment; filename={fname}"})
 
 
 # ==================== PUBLIC (supplier-facing, no auth) ====================
