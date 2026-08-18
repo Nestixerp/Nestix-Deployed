@@ -1,9 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import Dict, List
 import os
 import json
+import base64
+
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/data-migration", tags=["data-migration"])
 
@@ -12,66 +15,73 @@ mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ.get('DB_NAME', 'test_database')]
 
+# Collections never included in backups (ephemeral/system)
+EXCLUDED_COLLECTIONS = {'notifications_cron'}
+
+
+def _require_admin(user: dict):
+    if (user or {}).get('role') not in ('Administrator', 'Admin'):
+        raise HTTPException(status_code=403, detail="Administrator role required")
+
+
+def _sanitize(value):
+    """Make a Mongo document JSON-safe (datetime -> ISO, bytes -> base64 marker)."""
+    if isinstance(value, dict):
+        return {k: _sanitize(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize(v) for v in value]
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, bytes):
+        return {'__b64__': base64.b64encode(value).decode()}
+    return value
+
+
+def _restore(value):
+    if isinstance(value, dict):
+        if set(value.keys()) == {'__b64__'}:
+            return base64.b64decode(value['__b64__'])
+        return {k: _restore(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_restore(v) for v in value]
+    return value
+
 
 @router.get("/export-all")
-async def export_all_data():
+async def export_all_data(current_user: dict = Depends(get_current_user)):
     """
-    Export all data from the database (except users which are handled by seed)
-    Returns JSON that can be imported into another deployment
+    Full backup: export EVERY collection in the database (users included, passwords
+    stay hashed). Returns JSON that can be imported into another deployment.
     """
+    _require_admin(current_user)
     try:
         export_data = {}
-        
-        # Collections to export
-        collections = [
-            'customers',
-            'quotes',
-            'job_sheets',
-            'invoices',
-            'packing_slips',
-            'materials',
-            'suppliers',
-            'employees',
-            'purchase_orders',
-            'machines',
-            'settings',
-            'counters',
-            'time_entries',
-            'calibration_records',
-            'instruments',
-            'electricity_usage',
-            'recycled_metal'
-        ]
-        
+        collections = sorted(
+            n for n in await db.list_collection_names()
+            if n not in EXCLUDED_COLLECTIONS and not n.startswith('system.')
+        )
+
         for collection_name in collections:
-            collection = db[collection_name]
-            documents = await collection.find().to_list(length=None)
-            
-            # Remove MongoDB _id field
-            for doc in documents:
-                if '_id' in doc:
-                    del doc['_id']
-            
-            export_data[collection_name] = documents
-            print(f"Exported {len(documents)} documents from {collection_name}")
-        
-        # Add metadata
+            documents = await db[collection_name].find({}, {'_id': 0}).to_list(length=None)
+            export_data[collection_name] = [_sanitize(d) for d in documents]
+
         export_data['_metadata'] = {
             'export_date': datetime.now(timezone.utc).isoformat(),
             'database_name': os.environ.get('DB_NAME', 'test_database'),
-            'total_collections': len(collections)
+            'total_collections': len(collections),
+            'format_version': 2,
         }
-        
+
         return {
             "success": True,
             "export_data": export_data,
             "summary": {
-                collection: len(documents) 
-                for collection, documents in export_data.items() 
+                collection: len(documents)
+                for collection, documents in export_data.items()
                 if collection != '_metadata'
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -80,47 +90,62 @@ async def export_all_data():
 
 
 @router.post("/import-all")
-async def import_all_data(import_data: dict):
+async def import_all_data(import_data: dict, mode: str = "replace",
+                          current_user: dict = Depends(get_current_user)):
     """
-    Import data exported from another deployment
-    WARNING: This will ADD to existing data, not replace it
+    Restore a backup into this deployment.
+    mode=replace (default): each collection in the file is CLEARED first, then restored — exact copy.
+    mode=merge: documents are upserted by their 'id' field (or appended when no id).
     """
+    _require_admin(current_user)
+    if mode not in ("replace", "merge"):
+        raise HTTPException(status_code=400, detail="mode must be 'replace' or 'merge'")
     try:
         if 'export_data' not in import_data:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid import data format. Expected 'export_data' field."
             )
-        
+
         data = import_data['export_data']
         import_summary = {}
-        
-        # Import each collection
+
         for collection_name, documents in data.items():
-            if collection_name == '_metadata':
+            if collection_name == '_metadata' or collection_name in EXCLUDED_COLLECTIONS:
                 continue
-            
-            if not documents or len(documents) == 0:
-                import_summary[collection_name] = 0
-                continue
-            
+
             collection = db[collection_name]
-            
-            # Insert documents
+            documents = [_restore(d) for d in (documents or [])]
+
             try:
-                result = await collection.insert_many(documents)
-                import_summary[collection_name] = len(result.inserted_ids)
-                print(f"Imported {len(result.inserted_ids)} documents to {collection_name}")
+                if mode == "replace":
+                    await collection.delete_many({})
+                    if documents:
+                        result = await collection.insert_many(documents)
+                        import_summary[collection_name] = len(result.inserted_ids)
+                    else:
+                        import_summary[collection_name] = 0
+                else:  # merge
+                    count = 0
+                    for doc in documents:
+                        if doc.get('id'):
+                            await collection.replace_one({'id': doc['id']}, doc, upsert=True)
+                        else:
+                            await collection.insert_one(doc)
+                        count += 1
+                    import_summary[collection_name] = count
             except Exception as e:
-                print(f"Error importing {collection_name}: {str(e)}")
                 import_summary[collection_name] = f"Error: {str(e)}"
-        
+
         return {
             "success": True,
+            "mode": mode,
             "import_summary": import_summary,
             "metadata": data.get('_metadata', {})
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -234,7 +259,8 @@ async def remove_duplicates():
 
 
 @router.delete("/clear-all-data")
-async def clear_all_data(confirm: str):
+async def clear_all_data(confirm: str, current_user: dict = Depends(get_current_user)):
+    _require_admin(current_user)
     """
     DANGER: Clear all data from database (except users)
     Requires confirm="YES_DELETE_ALL_DATA"
@@ -287,7 +313,8 @@ async def clear_all_data(confirm: str):
 
 
 @router.get("/clear-all-data-get")
-async def clear_all_data_get(confirm: str):
+async def clear_all_data_get(confirm: str, current_user: dict = Depends(get_current_user)):
+    _require_admin(current_user)
     """
     DANGER: Clear all data from database (except users)
     GET method version for browser access

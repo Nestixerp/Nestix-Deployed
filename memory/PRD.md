@@ -1016,3 +1016,13 @@ User need: send material pricing enquiries to suppliers WITHOUT email integratio
 
 ### Policy editor/PDF compression (Aug 2026) — DONE ✅
 Body Calibri 11pt, line-height 1.2, p margin 3pt (editor + PDF); H1 16pt / H2 13pt; Heading dropdown added to Quill toolbar. Conflict Minerals PDF: 2 pages, compact. (User's 6-page LPG policy will compress on production after redeploy.)
+
+## Full Backup/Restore upgrade (Aug 2026) — COMPLETE ✅ (self-tested: curl auth/export/replace/merge + UI export download)
+Purpose: migrate production data when the user redeploys under a new subdomain (they want to rename the deployed URL).
+- Upgraded existing Data Migration module (System → Data Migration):
+  - export-all now DYNAMIC: every collection in the DB (80 colls, users incl. hashed passwords; excludes notifications_cron), datetime→ISO + bytes→base64 sanitizers, auto-downloads nestix-backup-YYYY-MM-DD.json.
+  - import-all: ?mode=replace (clears each collection in file, exact copy — default, with confirm dialog) or ?mode=merge (upsert by id).
+  - SECURITY: added admin-role auth to export-all/import-all/clear-all-data endpoints (were previously UNAUTHENTICATED).
+  - UI: file picker for restore, Replace/Merge radios, compact per-collection summaries, updated migration instructions.
+- Files: backend/routes/data_migration_routes.py, frontend/src/pages/DataMigration.js.
+- Platform context: user wants to rename deployed URL (pressbrake-quotes.emergent.host) — support said rename project → new deployment (50cr) → migrate data → shut old down; renaming steps escalated to support@emergent.sh.

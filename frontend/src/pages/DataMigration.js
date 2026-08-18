@@ -7,8 +7,11 @@ import { CheckCircle, AlertCircle, Download, Upload, Database } from 'lucide-rea
 import api from '../services/api';
 
 const DataMigration = () => {
-  const [exportData, setExportData] = useState('');
+  const exportRef = React.useRef('');
+  const [exportReady, setExportReady] = useState(false);
   const [importData, setImportData] = useState('');
+  const [importFileName, setImportFileName] = useState('');
+  const [importMode, setImportMode] = useState('replace');
   const [loading, setLoading] = useState(false);
   const [exportResult, setExportResult] = useState(null);
   const [importResult, setImportResult] = useState(null);
@@ -20,32 +23,54 @@ const DataMigration = () => {
     setLoading(true);
     setError('');
     setExportResult(null);
+    setExportReady(false);
     
     try {
       const response = await api.get('/data-migration/export-all');
-      const jsonString = JSON.stringify(response.data, null, 2);
-      setExportData(jsonString);
+      exportRef.current = JSON.stringify(response.data);
+      setExportReady(true);
       setExportResult(response.data.summary);
+      // auto-download the backup file
+      const blob = new Blob([exportRef.current], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nestix-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Failed to export data: ' + err.message);
+      setError('Failed to export data: ' + (err.response?.data?.detail || err.message));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDownloadExport = () => {
-    const blob = new Blob([exportData], { type: 'application/json' });
+    const blob = new Blob([exportRef.current], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'nestix-data-export.json';
+    a.download = `nestix-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImportData(ev.target.result);
+    reader.readAsText(file);
+  };
+
   const handleImport = async () => {
     if (!importData.trim()) {
-      setError('Please paste the export data first');
+      setError('Choose a backup file or paste the export data first');
+      return;
+    }
+    if (importMode === 'replace' &&
+        !window.confirm('REPLACE mode will CLEAR every collection contained in the backup file before restoring it. This cannot be undone. Continue?')) {
       return;
     }
 
@@ -55,12 +80,12 @@ const DataMigration = () => {
 
     try {
       const parsedData = JSON.parse(importData);
-      const response = await api.post('/data-migration/import-all', parsedData);
+      const response = await api.post(`/data-migration/import-all?mode=${importMode}`, parsedData);
       setImportResult(response.data.import_summary);
       alert('✅ Data imported successfully!');
     } catch (err) {
       if (err instanceof SyntaxError) {
-        setError('Invalid JSON format. Please check the pasted data.');
+        setError('Invalid JSON format. Please check the file / pasted data.');
       } else {
         setError('Failed to import data: ' + (err.response?.data?.detail || err.message));
       }
@@ -70,7 +95,7 @@ const DataMigration = () => {
   };
 
   const handleCopyExport = () => {
-    navigator.clipboard.writeText(exportData);
+    navigator.clipboard.writeText(exportRef.current);
     alert('✅ Export data copied to clipboard!');
   };
 
@@ -266,10 +291,10 @@ const DataMigration = () => {
         <CardHeader>
           <CardTitle className="flex items-center">
             <Download className="w-5 h-5 mr-2" />
-            Step 1: Export Data
+            Step 1: Full Backup (Export)
           </CardTitle>
           <CardDescription>
-            Export all data from this deployment (customers, quotes, job sheets, etc.)
+            Exports EVERY collection in the database — quotes, job sheets, customers, ISO modules, policies, RFQs, settings, users, everything. A backup file downloads automatically.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -278,18 +303,19 @@ const DataMigration = () => {
             disabled={loading}
             className="w-full"
             size="lg"
+            data-testid="export-all-btn"
           >
             <Database className="w-4 h-4 mr-2" />
-            {loading ? 'Exporting...' : 'Export All Data'}
+            {loading ? 'Exporting...' : 'Export Full Backup'}
           </Button>
 
           {exportResult && (
             <Alert>
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                <div className="font-semibold mb-2">Export Successful!</div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {Object.entries(exportResult).map(([collection, count]) => (
+                <div className="font-semibold mb-2" data-testid="export-success">Backup downloaded — {Object.keys(exportResult).length} collections, {Object.values(exportResult).reduce((a, b) => a + (Number(b) || 0), 0)} records</div>
+                <div className="grid grid-cols-3 gap-1 text-xs max-h-48 overflow-y-auto">
+                  {Object.entries(exportResult).filter(([, c]) => c > 0).map(([collection, count]) => (
                     <div key={collection}>
                       <span className="font-medium">{collection}:</span> {count}
                     </div>
@@ -299,24 +325,14 @@ const DataMigration = () => {
             </Alert>
           )}
 
-          {exportData && (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <Button onClick={handleCopyExport} variant="outline" className="flex-1">
-                  Copy to Clipboard
-                </Button>
-                <Button onClick={handleDownloadExport} variant="outline" className="flex-1">
-                  Download JSON File
-                </Button>
-              </div>
-              
-              <Textarea
-                value={exportData}
-                readOnly
-                rows={8}
-                className="font-mono text-xs"
-                placeholder="Export data will appear here..."
-              />
+          {exportReady && (
+            <div className="flex gap-2">
+              <Button onClick={handleCopyExport} variant="outline" className="flex-1">
+                Copy to Clipboard
+              </Button>
+              <Button onClick={handleDownloadExport} variant="outline" className="flex-1">
+                Download Again
+              </Button>
             </div>
           )}
         </CardContent>
@@ -327,19 +343,36 @@ const DataMigration = () => {
         <CardHeader>
           <CardTitle className="flex items-center">
             <Upload className="w-5 h-5 mr-2" />
-            Step 2: Import Data
+            Step 2: Restore (Import)
           </CardTitle>
           <CardDescription>
-            Paste the exported JSON data and click Import
+            Choose a backup file (or paste the JSON), pick a mode, and click Restore
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <input type="file" accept=".json,application/json" onChange={handleImportFile}
+              data-testid="import-file-input"
+              className="text-sm file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:bg-slate-800 file:text-white file:cursor-pointer" />
+            {importFileName && <span className="text-xs text-green-700 font-medium">✓ {importFileName} loaded</span>}
+          </div>
+          <div className="flex gap-4 text-sm">
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="importMode" checked={importMode === 'replace'} onChange={() => setImportMode('replace')} data-testid="mode-replace" />
+              <b>Replace</b> — exact copy (clears each collection first). Use when migrating to a new deployment.
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="importMode" checked={importMode === 'merge'} onChange={() => setImportMode('merge')} data-testid="mode-merge" />
+              <b>Merge</b> — update/add records by ID, keep everything else
+            </label>
+          </div>
           <Textarea
-            value={importData}
-            onChange={(e) => setImportData(e.target.value)}
-            rows={10}
+            value={importData.length > 100000 ? `(file loaded — ${(importData.length / 1e6).toFixed(1)} MB)` : importData}
+            onChange={(e) => { setImportData(e.target.value); setImportFileName(''); }}
+            rows={5}
             className="font-mono text-xs"
-            placeholder="Paste the exported JSON data here..."
+            placeholder="...or paste the exported JSON data here..."
+            readOnly={importData.length > 100000}
           />
 
           <Button 
@@ -347,20 +380,21 @@ const DataMigration = () => {
             disabled={loading || !importData}
             className="w-full bg-green-600 hover:bg-green-700"
             size="lg"
+            data-testid="import-btn"
           >
             <Upload className="w-4 h-4 mr-2" />
-            {loading ? 'Importing...' : 'Import Data'}
+            {loading ? 'Restoring...' : `Restore Backup (${importMode})`}
           </Button>
 
           {importResult && (
             <Alert>
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                <div className="font-semibold mb-2">Import Successful!</div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="font-semibold mb-2" data-testid="import-success">Restore complete</div>
+                <div className="grid grid-cols-3 gap-1 text-xs max-h-48 overflow-y-auto">
                   {Object.entries(importResult).map(([collection, count]) => (
                     <div key={collection}>
-                      <span className="font-medium">{collection}:</span> {count}
+                      <span className="font-medium">{collection}:</span> {String(count)}
                     </div>
                   ))}
                 </div>
@@ -381,31 +415,18 @@ const DataMigration = () => {
       {/* Instructions */}
       <Card className="bg-blue-50">
         <CardHeader>
-          <CardTitle className="text-lg">Migration Instructions</CardTitle>
+          <CardTitle className="text-lg">Migrating to a New Deployment</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <div>
-            <strong>Exporting from quotetojob.preview:</strong>
-            <ol className="list-decimal ml-5 mt-1 space-y-1">
-              <li>Go to: https://quote-pdf-breaks.preview.emergentagent.com/data-migration</li>
-              <li>Click "Export All Data"</li>
-              <li>Click "Copy to Clipboard" or "Download JSON File"</li>
-            </ol>
-          </div>
-          <div className="mt-4">
-            <strong>Importing to pressbrake-quotes:</strong>
-            <ol className="list-decimal ml-5 mt-1 space-y-1">
-              <li>Go to: https://pressbrake-quotes.emergent.host/data-migration</li>
-              <li>Paste the JSON data in the Import section</li>
-              <li>Click "Import Data"</li>
-              <li>Wait for confirmation</li>
-            </ol>
-          </div>
-          <div className="mt-4 p-3 bg-yellow-100 rounded">
-            <strong>⚠️ Important:</strong> Make sure users are initialized on pressbrake-quotes first by visiting:
-            <code className="block mt-1 bg-white p-2 rounded">
-              https://pressbrake-quotes.emergent.host/api/seed/reset-users
-            </code>
+          <ol className="list-decimal ml-5 space-y-1">
+            <li>On your <b>OLD deployed site</b>: log in as admin → System → Data Migration → <b>Export Full Backup</b> (file downloads)</li>
+            <li>Deploy the new instance and open it</li>
+            <li>Log in as admin on the <b>NEW site</b> → System → Data Migration → choose the backup file → mode <b>Replace</b> → <b>Restore Backup</b></li>
+            <li>Log out and back in (user accounts including passwords are restored from the backup)</li>
+            <li>Verify quotes/job sheets/customers, then shut down the old deployment from the Home tab</li>
+          </ol>
+          <div className="mt-3 p-3 bg-yellow-100 rounded">
+            <strong>⚠️ Replace mode</strong> clears each collection contained in the backup before restoring — use it only on a fresh deployment or when you want an exact copy.
           </div>
         </CardContent>
       </Card>
