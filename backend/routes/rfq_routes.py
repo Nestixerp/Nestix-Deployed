@@ -132,6 +132,107 @@ async def delete_rfq(rfq_id: str, current_user=Depends(get_current_user)):
     return {"success": True}
 
 
+@router.get("/{rfq_id}/export/pdf")
+async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_user)):
+    """One-page supplier price comparison: items as rows, suppliers as columns."""
+    from fastapi.responses import StreamingResponse
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from io import BytesIO
+
+    rfq = await db[RFQS].find_one({"id": rfq_id}, {"_id": 0})
+    if not rfq:
+        raise HTTPException(404, "RFQ not found")
+    responses = await db[RESPONSES].find({"rfq_id": rfq_id}, {"_id": 0}).sort("submitted_at", 1).to_list(50)
+    company = await db.company_settings.find_one({}, {"_id": 0}) or {}
+
+    S_T = ParagraphStyle('t', fontName='Helvetica-Bold', fontSize=14, spaceAfter=2)
+    S_M = ParagraphStyle('m', fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#555555'), spaceAfter=8)
+    S_C = ParagraphStyle('c', fontName='Helvetica', fontSize=8, leading=10)
+    S_CB = ParagraphStyle('cb', fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.white)
+
+    page = landscape(A4) if len(responses) > 3 else A4
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=page, topMargin=1.4 * cm, bottomMargin=1.4 * cm,
+                            leftMargin=1.4 * cm, rightMargin=1.4 * cm)
+    story = [
+        Paragraph(f"{(company.get('company_name') or '').upper()} — SUPPLIER PRICE COMPARISON", S_T),
+        Paragraph(f"{rfq.get('rfq_number')} · {rfq.get('title')} · "
+                  f"{len(responses)} supplier response(s) · Printed {datetime.now(timezone.utc).strftime('%d/%m/%Y')}", S_M),
+    ]
+
+    header = [Paragraph('Code', S_CB), Paragraph('Material / Description', S_CB),
+              Paragraph('Size', S_CB), Paragraph('Qty', S_CB)]
+    for r in responses:
+        header.append(Paragraph((r.get('supplier_company') or '')[:40], S_CB))
+
+    rows = [header]
+    best_cells = []  # (row, col) of cheapest per row
+    for ri, item in enumerate(rfq.get('items', []), start=1):
+        row = [Paragraph(item.get('code') or '—', S_C),
+               Paragraph(item.get('description') or '', S_C),
+               Paragraph(item.get('size') or '', S_C),
+               Paragraph(str(item.get('quantity') or ''), S_C)]
+        prices = []
+        for r in responses:
+            ir = next((x for x in (r.get('items') or []) if x.get('item_id') == item.get('id')), None)
+            if not ir:
+                row.append(Paragraph('—', S_C)); prices.append(None); continue
+            parts = []
+            if ir.get('price') is not None:
+                parts.append(f"${ir['price']:.2f} ea")
+            if ir.get('available') is False and not ir.get('alternative_size'):
+                parts.append('N/A')
+            if ir.get('alternative_size'):
+                alt = f"ALT: {ir['alternative_size']}"
+                if ir.get('alternative_price') is not None:
+                    alt += f" @ ${ir['alternative_price']:.2f}"
+                parts.append(alt)
+            if ir.get('notes'):
+                parts.append(ir['notes'][:60])
+            row.append(Paragraph('<br/>'.join(parts) or '—', S_C))
+            comparable = ir.get('price') if ir.get('price') is not None else ir.get('alternative_price')
+            prices.append(comparable)
+        valid = [p for p in prices if p is not None]
+        if valid:
+            best = min(valid)
+            for ci, p in enumerate(prices):
+                if p is not None and abs(p - best) < 0.005:
+                    best_cells.append((ri, 4 + ci))
+        rows.append(row)
+
+    usable = page[0] - 2.8 * cm
+    fixed = [1.6 * cm, 5.2 * cm, 3.0 * cm, 1.1 * cm]
+    sup_w = max((usable - sum(fixed)) / max(len(responses), 1), 2.5 * cm)
+    t = Table(rows, colWidths=fixed + [sup_w] * len(responses), repeatRows=1)
+    style = [
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.black),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]
+    for (r_, c_) in best_cells:
+        style.append(('BACKGROUND', (c_, r_), (c_, r_), colors.HexColor('#DCFCE7')))
+    t.setStyle(TableStyle(style))
+    story.append(t)
+    story.append(Spacer(1, 0.4 * cm))
+    story.append(Paragraph('Green = lowest comparable price per line (alternatives included). '
+                           'ALT = supplier-offered alternative size. N/A = size not available.', S_M))
+    for r in responses:
+        contact = ' · '.join(filter(None, [r.get('contact_name'), r.get('email'), r.get('phone')]))
+        note = f" — {r['overall_notes']}" if r.get('overall_notes') else ''
+        story.append(Paragraph(f"<b>{r.get('supplier_company')}</b>: {contact or 'no contact details'}{note}", S_M))
+    doc.build(story)
+    buf.seek(0)
+    fname = f"{rfq.get('rfq_number')}_Price_Comparison.pdf"
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
 # ==================== PUBLIC (supplier-facing, no auth) ====================
 
 @router.get("/public/{token}")

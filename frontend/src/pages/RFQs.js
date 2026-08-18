@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { ClipboardList, Plus, Link2, Trash2, Eye, Lock, Unlock, X } from 'lucide-react';
+import { ClipboardList, Plus, Link2, Trash2, Eye, Lock, Unlock, X, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
 
@@ -74,6 +74,17 @@ export default function RFQs() {
     setBusy(false);
   };
 
+  const printComparison = async (rfq) => {
+    try {
+      const res = await api.get(`/rfqs/${rfq.id}/export/pdf`, { responseType: 'blob' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      link.download = `${rfq.rfq_number}_Price_Comparison.pdf`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (e) { toast.error('Comparison export failed'); }
+  };
+
   const openView = async (rfq) => setViewRfq((await api.get(`/rfqs/${rfq.id}`)).data);
 
   const toggleStatus = async (rfq) => {
@@ -123,6 +134,7 @@ export default function RFQs() {
                   <td className="text-right whitespace-nowrap">
                     <Button size="sm" variant="ghost" title="Copy supplier link" data-testid={`copy-rfq-link-${r.rfq_number}`} onClick={() => copyLink(r)}><Link2 className="h-4 w-4" /></Button>
                     <Button size="sm" variant="ghost" title="View responses" data-testid={`view-rfq-${r.rfq_number}`} onClick={() => openView(r)}><Eye className="h-4 w-4" /></Button>
+                    <Button size="sm" variant="ghost" title="Print price comparison (all suppliers, 1 page)" data-testid={`print-comparison-${r.rfq_number}`} disabled={!r.response_count} onClick={() => printComparison(r)}><Printer className="h-4 w-4" /></Button>
                     <Button size="sm" variant="ghost" title={r.status === 'Open' ? 'Close enquiry' : 'Reopen enquiry'} onClick={() => toggleStatus(r)}>
                       {r.status === 'Open' ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                     </Button>

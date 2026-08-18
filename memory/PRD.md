@@ -1041,3 +1041,6 @@ ultimate-360.com linked + SSL issued and verified working (apex + www redirect).
 
 ### Password reset (Aug 2026) — VERIFIED EXISTING ✅
 Admin password reset already implemented: System → User Management → "Reset Pw" per user (POST /api/auth/users/{username}/reset-password, require_admin, bcrypt hash, min 6 chars). E2E verified: create user → reset → login with new password OK; unauthenticated reset = 403. User's production build predates it → needs redeploy. test_credentials.md updated to document admin123 (preview DB) vs password123 (fresh-deploy seeds).
+
+### RFQ Supplier Price Comparison printout (Aug 2026) — DONE ✅ (verified via rendered PDF)
+GET /api/rfqs/{id}/export/pdf — one-page ReportLab comparison: rows = items (code/description/size/qty), columns = each supplier's price; cheapest comparable price per line highlighted green (alternatives counted); ALT/N/A notation; supplier contacts + notes footer; auto landscape when >3 suppliers. Printer button (data-testid print-comparison-{rfq_number}) on each RFQs row, disabled until responses exist. Needs redeploy.
