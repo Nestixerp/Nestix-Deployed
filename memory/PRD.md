@@ -1038,3 +1038,6 @@ Files: rfq_routes.py (RFQItem.code), RFQs.js, PublicRFQ.js. Needs redeploy.
 
 ### Custom domain (Aug 2026)
 ultimate-360.com linked + SSL issued and verified working (apex + www redirect). Login fix (runtime backendUrl.js) shipped for it.
+
+### Password reset (Aug 2026) — VERIFIED EXISTING ✅
+Admin password reset already implemented: System → User Management → "Reset Pw" per user (POST /api/auth/users/{username}/reset-password, require_admin, bcrypt hash, min 6 chars). E2E verified: create user → reset → login with new password OK; unauthenticated reset = 403. User's production build predates it → needs redeploy. test_credentials.md updated to document admin123 (preview DB) vs password123 (fresh-deploy seeds).
