@@ -1029,3 +1029,12 @@ Purpose: migrate production data when the user redeploys under a new subdomain (
 
 ### Bug fix (Aug 2026): Login broken on custom domain (ultimate-360.com) — RESOLVED ✅
 Cause: frontend baked REACT_APP_BACKEND_URL (pressbrake-quotes.emergent.host) at build time; browsing via the custom domain made API calls cross-origin → login failed. Fix: new /app/frontend/src/lib/backendUrl.js resolves backend URL at RUNTIME — uses window.location.origin unless on localhost (dev). Updated services/api.js + 7 pages that used the env var directly (EmploymentApplicationForm, CustomerSatisfactionPublicSurvey, RecycledMetal, CalibrationSchedule, EfficiencyReports, PublicRFQ, ElectricityUsage, CalibrationRecord). App now works on ANY domain. Verified login on localhost dev branch. USER MUST REDEPLOY.
+
+### RFQ enhancements (Aug 2026) — DONE ✅ (self-tested E2E)
+1. Supplier details remembered per device via localStorage on the public page (private to each supplier's browser; prefilled on next visit; saved on successful submit).
+2. Optional "Pick from materials…" dropdown per RFQ item (loads /materials, autofills description/material/size and code MAT-{id}).
+3. New `code` field on RFQ items — shown in create dialog, public supplier page (Code: MAT-001) and internal responses table.
+Files: rfq_routes.py (RFQItem.code), RFQs.js, PublicRFQ.js. Needs redeploy.
+
+### Custom domain (Aug 2026)
+ultimate-360.com linked + SSL issued and verified working (apex + www redirect). Login fix (runtime backendUrl.js) shipped for it.

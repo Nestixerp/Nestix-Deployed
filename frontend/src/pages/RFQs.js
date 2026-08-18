@@ -9,17 +9,35 @@ import { ClipboardList, Plus, Link2, Trash2, Eye, Lock, Unlock, X } from 'lucide
 import { toast } from 'sonner';
 import api from '../services/api';
 
-const emptyItem = () => ({ description: '', material_type: '', size: '', quantity: 1, notes: '' });
+const emptyItem = () => ({ description: '', material_type: '', size: '', code: '', quantity: 1, notes: '' });
 
 export default function RFQs() {
   const [rfqs, setRfqs] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ title: '', notes: '', required_by: '', items: [emptyItem()] });
   const [viewRfq, setViewRfq] = useState(null);
+  const [materials, setMaterials] = useState([]);
   const [busy, setBusy] = useState(false);
 
   const load = async () => setRfqs((await api.get('/rfqs')).data.items);
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    api.get('/materials').then(r => setMaterials(r.data || [])).catch(() => {});
+  }, []);
+
+  const pickMaterial = (i, matId) => {
+    const m = materials.find(x => String(x.id) === String(matId));
+    if (!m) return;
+    const items = [...form.items];
+    items[i] = {
+      ...items[i],
+      description: [m.name, m.grade, m.finish, m.type].filter(Boolean).join(' '),
+      material_type: [m.name, m.grade].filter(Boolean).join(' '),
+      size: [m.thickness, m.length && m.width ? `${m.length} x ${m.width}` : ''].filter(Boolean).join(' x ').replace(' x  ', ' '),
+      code: items[i].code || `MAT-${m.id}`,
+    };
+    setForm({ ...form, items });
+  };
 
   const publicLink = (rfq) => `${window.location.origin}/rfq/${rfq.public_token}`;
   const copyLink = async (rfq) => {
@@ -137,12 +155,24 @@ export default function RFQs() {
                 <Button size="sm" variant="outline" data-testid="rfq-add-item-btn" onClick={() => setForm({ ...form, items: [...form.items, emptyItem()] })}><Plus className="h-3 w-3 mr-1" /> Add Item</Button>
               </div>
               {form.items.map((it, i) => (
-                <div key={i} className="grid grid-cols-[2fr_1fr_1fr_70px_28px] gap-2 mb-2 items-center">
-                  <Input placeholder="Description (e.g. Mild Steel HA3 P&O Sheet)" data-testid={`rfq-item-desc-${i}`} value={it.description} onChange={e => setItem(i, 'description', e.target.value)} className="h-9" />
-                  <Input placeholder="Material / Grade" value={it.material_type} onChange={e => setItem(i, 'material_type', e.target.value)} className="h-9" />
-                  <Input placeholder="Size (e.g. 3.0 x 2400 x 1200)" data-testid={`rfq-item-size-${i}`} value={it.size} onChange={e => setItem(i, 'size', e.target.value)} className="h-9" />
-                  <Input type="number" min="1" title="Quantity" value={it.quantity} onChange={e => setItem(i, 'quantity', parseFloat(e.target.value) || 1)} className="h-9" />
-                  <button className="text-red-500" onClick={() => setForm({ ...form, items: form.items.filter((_, j) => j !== i) })}><X className="h-4 w-4" /></button>
+                <div key={i} className="border rounded p-2 mb-2 bg-slate-50">
+                  <div className="grid grid-cols-[1fr_2fr_28px] gap-2 mb-2 items-center">
+                    <select className="border rounded h-9 px-2 text-sm bg-white" data-testid={`rfq-item-material-select-${i}`}
+                      value="" onChange={e => { if (e.target.value) pickMaterial(i, e.target.value); }}>
+                      <option value="">Pick from materials… (optional)</option>
+                      {materials.map(m => (
+                        <option key={m.id} value={m.id}>{[m.name, m.grade, m.thickness].filter(Boolean).join(' ')}</option>
+                      ))}
+                    </select>
+                    <Input placeholder="Description (e.g. Mild Steel HA3 P&O Sheet)" data-testid={`rfq-item-desc-${i}`} value={it.description} onChange={e => setItem(i, 'description', e.target.value)} className="h-9 bg-white" />
+                    <button className="text-red-500" onClick={() => setForm({ ...form, items: form.items.filter((_, j) => j !== i) })}><X className="h-4 w-4" /></button>
+                  </div>
+                  <div className="grid grid-cols-[1fr_1fr_110px_70px] gap-2 items-center">
+                    <Input placeholder="Material / Grade" value={it.material_type} onChange={e => setItem(i, 'material_type', e.target.value)} className="h-9 bg-white" />
+                    <Input placeholder="Size (e.g. 3.0 x 2400 x 1200)" data-testid={`rfq-item-size-${i}`} value={it.size} onChange={e => setItem(i, 'size', e.target.value)} className="h-9 bg-white" />
+                    <Input placeholder="Code #" data-testid={`rfq-item-code-${i}`} value={it.code || ''} onChange={e => setItem(i, 'code', e.target.value)} className="h-9 bg-white" />
+                    <Input type="number" min="1" title="Quantity" value={it.quantity} onChange={e => setItem(i, 'quantity', parseFloat(e.target.value) || 1)} className="h-9 bg-white" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -183,7 +213,7 @@ export default function RFQs() {
                           const src = (viewRfq.items || []).find(x => x.id === ri2.item_id) || {};
                           return (
                             <tr key={ii} className="border-t">
-                              <td className="p-1.5">{src.description} <span className="text-slate-400">x{src.quantity}</span></td>
+                              <td className="p-1.5">{src.code ? <span className="font-mono text-slate-500">[{src.code}] </span> : ''}{src.description} <span className="text-slate-400">x{src.quantity}</span></td>
                               <td className="p-1.5">{src.size}</td>
                               <td className="p-1.5 text-right font-semibold">{ri2.available === false && !ri2.alternative_size ? <span className="text-red-600">N/A</span> : (ri2.price != null ? `$${Number(ri2.price).toFixed(2)}` : '—')}</td>
                               <td className="p-1.5">{ri2.alternative_size ? <span className="text-amber-700">{ri2.alternative_size}{ri2.alternative_price != null ? ` @ $${Number(ri2.alternative_price).toFixed(2)}` : ''}</span> : '—'}</td>

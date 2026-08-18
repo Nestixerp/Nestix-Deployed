@@ -31,6 +31,7 @@ class RFQItem(BaseModel):
     description: str
     material_type: Optional[str] = ""
     size: Optional[str] = ""
+    code: Optional[str] = ""
     quantity: float = 1
     notes: Optional[str] = ""
 

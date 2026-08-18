@@ -20,6 +20,11 @@ export default function PublicRFQ() {
   const [validationError, setValidationError] = useState('');
 
   useEffect(() => {
+    // Prefill supplier details remembered on this device (private to this browser)
+    try {
+      const saved = JSON.parse(localStorage.getItem('rfq_supplier_details') || 'null');
+      if (saved?.supplier_company) setSupplier(s => ({ ...s, ...saved, overall_notes: '' }));
+    } catch (e) { /* ignore */ }
     axios.get(`${API}/api/rfqs/public/${token}`)
       .then(r => {
         setRfq(r.data);
@@ -46,6 +51,14 @@ export default function PublicRFQ() {
     setBusy(true);
     try {
       await axios.post(`${API}/api/rfqs/public/${token}/respond`, { ...supplier, items });
+      try {
+        localStorage.setItem('rfq_supplier_details', JSON.stringify({
+          supplier_company: supplier.supplier_company,
+          contact_name: supplier.contact_name,
+          email: supplier.email,
+          phone: supplier.phone,
+        }));
+      } catch (e) { /* ignore */ }
       setSubmitted(true);
     } catch (e) {
       setValidationError(e?.response?.data?.detail || 'Submission failed — please try again.');
@@ -93,7 +106,7 @@ export default function PublicRFQ() {
 
         <Card>
           <CardContent className="pt-5 pb-5 space-y-3">
-            <h2 className="font-semibold">Your Details</h2>
+            <h2 className="font-semibold">Your Details <span className="text-xs font-normal text-slate-500">(remembered on this device for next time)</span></h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div><label className="text-xs font-medium">Company Name *</label>
                 <Input data-testid="supplier-company-input" placeholder="Your company name" value={supplier.supplier_company} onChange={e => setSupplier({ ...supplier, supplier_company: e.target.value })} /></div>
@@ -116,6 +129,7 @@ export default function PublicRFQ() {
                   <div>
                     <span className="font-semibold">{idx + 1}. {it.description}</span>
                     <div className="text-xs text-slate-600">
+                      {it.code && <>Code: <b className="font-mono">{it.code}</b> · </>}
                       {it.material_type && <>Material: {it.material_type} · </>}
                       {it.size && <>Size: <b>{it.size}</b> · </>}
                       Qty: <b>{it.quantity}</b>
