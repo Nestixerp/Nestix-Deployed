@@ -248,6 +248,26 @@ export default function RFQs() {
                         })}
                       </tbody>
                     </table>
+                    {(resp.freight != null || (resp.extra_costs || []).length > 0 || resp.attachment_name) && (
+                      <div className="flex flex-wrap gap-3 text-xs mt-2 items-center">
+                        {resp.freight != null && <span className="bg-blue-50 border border-blue-200 rounded px-2 py-1">Freight: <b>${Number(resp.freight).toFixed(2)}</b></span>}
+                        {(resp.extra_costs || []).map((c, ci) => (
+                          <span key={ci} className="bg-amber-50 border border-amber-200 rounded px-2 py-1">{c.label || 'Charge'}: <b>{c.amount != null ? `$${Number(c.amount).toFixed(2)}` : '—'}</b></span>
+                        ))}
+                        {resp.attachment_name && (
+                          <Button size="sm" variant="outline" className="h-6 text-xs" data-testid={`download-attachment-${ri}`}
+                            onClick={async () => {
+                              const res = await api.get(`/rfqs/${viewRfq.id}/responses/${resp.id}/attachment`, { responseType: 'blob' });
+                              const link = document.createElement('a');
+                              link.href = URL.createObjectURL(new Blob([res.data]));
+                              link.download = resp.attachment_name;
+                              link.click(); URL.revokeObjectURL(link.href);
+                            }}>
+                            📎 {resp.attachment_name}
+                          </Button>
+                        )}
+                      </div>
+                    )}
                     {resp.overall_notes && <div className="text-xs text-slate-600 mt-2"><b>Supplier notes:</b> {resp.overall_notes}</div>}
                   </CardContent>
                 </Card>

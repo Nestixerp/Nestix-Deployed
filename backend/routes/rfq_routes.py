@@ -52,12 +52,21 @@ class ResponseItem(BaseModel):
     notes: Optional[str] = ""
 
 
+class ExtraCost(BaseModel):
+    label: str = ""
+    amount: Optional[float] = None
+
+
 class SupplierResponse(BaseModel):
     supplier_company: str
     contact_name: Optional[str] = ""
     email: Optional[str] = ""
     phone: Optional[str] = ""
     overall_notes: Optional[str] = ""
+    freight: Optional[float] = None
+    extra_costs: List[ExtraCost] = []
+    attachment_name: Optional[str] = ""
+    attachment_b64: Optional[str] = ""
     items: List[ResponseItem]
 
 
@@ -105,8 +114,21 @@ async def get_rfq(rfq_id: str, current_user=Depends(get_current_user)):
     rfq = await db[RFQS].find_one({"id": rfq_id}, {"_id": 0})
     if not rfq:
         raise HTTPException(404, "RFQ not found")
-    rfq["responses"] = await db[RESPONSES].find({"rfq_id": rfq_id}, {"_id": 0}).sort("submitted_at", 1).to_list(100)
+    rfq["responses"] = await db[RESPONSES].find({"rfq_id": rfq_id}, {"_id": 0, "attachment_b64": 0}).sort("submitted_at", 1).to_list(100)
     return rfq
+
+
+@router.get("/{rfq_id}/responses/{resp_id}/attachment")
+async def download_response_attachment(rfq_id: str, resp_id: str, current_user=Depends(get_current_user)):
+    from fastapi.responses import Response as FastResponse
+    import base64 as _b64
+    resp = await db[RESPONSES].find_one({"id": resp_id, "rfq_id": rfq_id}, {"_id": 0})
+    if not resp or not resp.get("attachment_b64"):
+        raise HTTPException(404, "No attachment")
+    raw = _b64.b64decode(resp["attachment_b64"])
+    fname = resp.get("attachment_name") or "supplier_quote"
+    return FastResponse(content=raw, media_type="application/octet-stream",
+                        headers={"Content-Disposition": f"attachment; filename={fname}"})
 
 
 class StatusIn(BaseModel):
@@ -146,7 +168,7 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
     rfq = await db[RFQS].find_one({"id": rfq_id}, {"_id": 0})
     if not rfq:
         raise HTTPException(404, "RFQ not found")
-    responses = await db[RESPONSES].find({"rfq_id": rfq_id}, {"_id": 0}).sort("submitted_at", 1).to_list(50)
+    responses = await db[RESPONSES].find({"rfq_id": rfq_id}, {"_id": 0, "attachment_b64": 0}).sort("submitted_at", 1).to_list(50)
     company = await db.company_settings.find_one({}, {"_id": 0}) or {}
 
     S_T = ParagraphStyle('t', fontName='Helvetica-Bold', fontSize=14, spaceAfter=2)
@@ -203,6 +225,20 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
                 if p is not None and abs(p - best) < 0.005:
                     best_cells.append((ri, 4 + ci))
         rows.append(row)
+
+    # Freight & other charges rows
+    if any(r.get('freight') is not None or (r.get('extra_costs') or []) for r in responses):
+        frow = [Paragraph('', S_C), Paragraph('Freight', S_CB2 := ParagraphStyle('cb2', fontName='Helvetica-Bold', fontSize=8, leading=10)), Paragraph('', S_C), Paragraph('', S_C)]
+        for r in responses:
+            frow.append(Paragraph(f"${r['freight']:.2f}" if r.get('freight') is not None else '—', S_C))
+        rows.append(frow)
+        erow = [Paragraph('', S_C), Paragraph('Other charges', S_CB2), Paragraph('', S_C), Paragraph('', S_C)]
+        for r in responses:
+            extras = r.get('extra_costs') or []
+            txt = '<br/>'.join(f"{(c.get('label') or 'Charge')}: ${c['amount']:.2f}" if c.get('amount') is not None else (c.get('label') or '')
+                               for c in extras) or '—'
+            erow.append(Paragraph(txt, S_C))
+        rows.append(erow)
 
     usable = page[0] - 2.8 * cm
     fixed = [1.6 * cm, 5.2 * cm, 3.0 * cm, 1.1 * cm]
@@ -297,14 +333,39 @@ async def export_offline_html(rfq_id: str, request: Request, origin: Optional[st
  <label>Email <input type="email" id="s_email"></label>
  <label>Phone <input type="text" id="s_phone"></label></div>
 <div class="card"><b>Items</b>{items_html}
+ <b>Freight &amp; Other Charges</b>
+ <label>Freight (ex GST) $ <input type="number" step="0.01" min="0" id="s_freight"></label>
+ <label>Other cost 1 — description <input type="text" id="x_label0" placeholder="e.g. Fuel surcharge"></label>
+ <label>Other cost 1 — amount $ <input type="number" step="0.01" min="0" id="x_amt0"></label>
+ <label>Other cost 2 — description <input type="text" id="x_label1"></label>
+ <label>Other cost 2 — amount $ <input type="number" step="0.01" min="0" id="x_amt1"></label>
+ <label>Attach your quote (optional, max 5 MB) <input type="file" id="s_file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"></label>
  <label>General notes / terms <textarea id="s_notes" rows="3"></textarea></label>
  <div class="err" id="err"></div>
  <button onclick="submitPricing()">Submit Pricing</button></div>
 <script>
+function readFile(){{
+  return new Promise(function(res){{
+    var f=document.getElementById('s_file').files[0];
+    if(!f)return res(null);
+    if(f.size>5*1024*1024)return res({{err:'Attachment too large (max 5 MB).'}});
+    var r=new FileReader();
+    r.onload=function(e){{res({{name:f.name,b64:String(e.target.result).split(',')[1]}});}};
+    r.readAsDataURL(f);
+  }});
+}}
 async function submitPricing(){{
   var err=document.getElementById('err'); err.textContent='';
   var company=document.getElementById('s_company').value.trim();
   if(!company){{err.textContent='Please enter your company name.';return;}}
+  var att=await readFile();
+  if(att&&att.err){{err.textContent=att.err;return;}}
+  var extras=[];
+  for(var k=0;k<2;k++){{
+    var l=document.getElementById('x_label'+k).value, a=document.getElementById('x_amt'+k).value;
+    if(l||a)extras.push({{label:l,amount:a?parseFloat(a):null}});
+  }}
+  var fr=document.getElementById('s_freight').value;
   var items=[].map.call(document.querySelectorAll('.item'),function(el){{
     return {{item_id:el.dataset.id,
       price:el.querySelector('.price').value?parseFloat(el.querySelector('.price').value):null,
@@ -315,7 +376,9 @@ async function submitPricing(){{
   }});
   var payload={{supplier_company:company,contact_name:document.getElementById('s_contact').value,
     email:document.getElementById('s_email').value,phone:document.getElementById('s_phone').value,
-    overall_notes:document.getElementById('s_notes').value,items:items}};
+    overall_notes:document.getElementById('s_notes').value,
+    freight:fr?parseFloat(fr):null,extra_costs:extras,
+    attachment_name:att?att.name:'',attachment_b64:att?att.b64:'',items:items}};
   try{{
     var r=await fetch('{submit_url}',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});
     if(!r.ok){{var d=await r.json().catch(function(){{return {{}}}});throw new Error(d.detail||('HTTP '+r.status));}}
@@ -363,6 +426,8 @@ async def public_respond(token: str, payload: SupplierResponse):
         raise HTTPException(400, "This enquiry is closed")
     if not payload.supplier_company.strip():
         raise HTTPException(400, "Company name is required")
+    if payload.attachment_b64 and len(payload.attachment_b64) > 7_500_000:
+        raise HTTPException(400, "Attachment too large (max 5 MB)")
     valid_ids = {it["id"] for it in rfq.get("items", [])}
     items = [it.model_dump() for it in payload.items if it.item_id in valid_ids]
     doc = {
@@ -373,6 +438,10 @@ async def public_respond(token: str, payload: SupplierResponse):
         "email": payload.email,
         "phone": payload.phone,
         "overall_notes": payload.overall_notes,
+        "freight": payload.freight,
+        "extra_costs": [c.model_dump() for c in payload.extra_costs if c.label or c.amount is not None][:4],
+        "attachment_name": payload.attachment_name,
+        "attachment_b64": payload.attachment_b64,
         "items": items,
         "submitted_at": _now(),
     }

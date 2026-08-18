@@ -14,6 +14,9 @@ export default function PublicRFQ() {
   const [rfq, setRfq] = useState(null);
   const [error, setError] = useState('');
   const [supplier, setSupplier] = useState({ supplier_company: '', contact_name: '', email: '', phone: '', overall_notes: '' });
+  const [freight, setFreight] = useState('');
+  const [extras, setExtras] = useState([{ label: '', amount: '' }, { label: '', amount: '' }]);
+  const [attachment, setAttachment] = useState(null); // {name, b64}
   const [lines, setLines] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -37,6 +40,15 @@ export default function PublicRFQ() {
 
   const setLine = (id, field, val) => setLines(prev => ({ ...prev, [id]: { ...prev[id], [field]: val } }));
 
+  const onAttach = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) { setAttachment(null); return; }
+    if (f.size > 5 * 1024 * 1024) { setValidationError('Attachment too large (max 5 MB).'); e.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => setAttachment({ name: f.name, b64: String(ev.target.result).split(',', 2)[1] });
+    reader.readAsDataURL(f);
+  };
+
   const submit = async () => {
     setValidationError('');
     if (!supplier.supplier_company.trim()) { setValidationError('Please enter your company name.'); return; }
@@ -50,7 +62,14 @@ export default function PublicRFQ() {
     }));
     setBusy(true);
     try {
-      await axios.post(`${API}/api/rfqs/public/${token}/respond`, { ...supplier, items });
+      await axios.post(`${API}/api/rfqs/public/${token}/respond`, {
+        ...supplier,
+        freight: freight !== '' ? parseFloat(freight) : null,
+        extra_costs: extras.filter(x => x.label || x.amount !== '').map(x => ({ label: x.label, amount: x.amount !== '' ? parseFloat(x.amount) : null })),
+        attachment_name: attachment?.name || '',
+        attachment_b64: attachment?.b64 || '',
+        items,
+      });
       try {
         localStorage.setItem('rfq_supplier_details', JSON.stringify({
           supplier_company: supplier.supplier_company,
@@ -170,6 +189,32 @@ export default function PublicRFQ() {
             </Card>
           );
         })}
+
+        <Card>
+          <CardContent className="pt-4 pb-5 space-y-3">
+            <h2 className="font-semibold">Freight &amp; Other Charges</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div><label className="text-xs font-medium">Freight (ex GST)</label>
+                <Input type="number" step="0.01" min="0" placeholder="0.00" data-testid="freight-input" value={freight} onChange={e => setFreight(e.target.value)} /></div>
+            </div>
+            {extras.map((x, i) => (
+              <div key={i} className="grid grid-cols-[2fr_1fr] gap-3">
+                <div><label className="text-xs font-medium">Other cost {i + 1} — description</label>
+                  <Input placeholder="e.g. Fuel surcharge, cutting fee…" data-testid={`extra-label-${i}`} value={x.label}
+                    onChange={e => setExtras(prev => prev.map((p, j) => j === i ? { ...p, label: e.target.value } : p))} /></div>
+                <div><label className="text-xs font-medium">Amount (ex GST)</label>
+                  <Input type="number" step="0.01" min="0" placeholder="0.00" data-testid={`extra-amount-${i}`} value={x.amount}
+                    onChange={e => setExtras(prev => prev.map((p, j) => j === i ? { ...p, amount: e.target.value } : p))} /></div>
+              </div>
+            ))}
+            <div>
+              <label className="text-xs font-medium">Attach your quote (optional, max 5 MB)</label>
+              <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" onChange={onAttach} data-testid="attachment-input"
+                className="block text-sm mt-1 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-800 file:text-white file:cursor-pointer" />
+              {attachment && <span className="text-xs text-green-700">✓ {attachment.name} attached</span>}
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardContent className="pt-4 pb-5 space-y-3">

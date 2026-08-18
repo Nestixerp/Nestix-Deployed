@@ -1047,3 +1047,10 @@ GET /api/rfqs/{id}/export/pdf — one-page ReportLab comparison: rows = items (c
 
 ### RFQ offline email-attachable form (Aug 2026) — DONE ✅ (E2E tested from file:// incl. CORS submit)
 For suppliers whose cyber-security blocks links: new FileDown button per RFQ row downloads a SELF-CONTAINED HTML enquiry form (GET /api/rfqs/{id}/export/html?origin=<browser origin> — origin passed explicitly because proxy mangles headers). User attaches it to their work email; supplier opens locally, fills company (required)/prices/alternative sizes, clicks Submit → posts to public respond API (verified working from file:// with Origin:null CORS). Failure message tells supplier to reply by email. Needs redeploy.
+
+### RFQ: freight, extra costs, supplier attachment (Aug 2026) — DONE ✅ (E2E tested: API + public UI submit with file)
+Supplier response now supports: Freight (ex GST), TWO blank "other cost" rows (description + amount, e.g. surcharges), and an optional quote attachment (max 5 MB, stored base64 in rfq_responses; list queries exclude attachment_b64; download via GET /api/rfqs/{rfq_id}/responses/{resp_id}/attachment, auth).
+- Public page + offline email HTML form both include the new fields.
+- Internal responses view shows freight/extras chips + 📎 attachment download button.
+- Comparison PDF adds Freight and Other charges rows per supplier.
+Files: rfq_routes.py, PublicRFQ.js, RFQs.js. Needs redeploy.
