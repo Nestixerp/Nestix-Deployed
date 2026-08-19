@@ -25,6 +25,17 @@ export default function RFQs() {
     api.get('/materials').then(r => setMaterials(r.data || [])).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      load().catch(() => {});
+      setViewRfq(v => {
+        if (v) api.get(`/rfqs/${v.id}`).then(r => setViewRfq(cur => (cur && cur.id === v.id ? r.data : cur))).catch(() => {});
+        return v;
+      });
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   const pickMaterial = (i, matId) => {
     const m = materials.find(x => String(x.id) === String(matId));
     if (!m) return;

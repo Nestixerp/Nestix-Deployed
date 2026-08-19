@@ -1062,3 +1062,6 @@ Files: rfq_routes.py, PublicRFQ.js, RFQs.js. Needs redeploy.
 
 ### RFQ Comparison PDF — Portrait layout fix (Aug 2026) — DONE ✅ (visually verified)
 User reported horizontal cropping with many suppliers. Changed export_comparison_pdf (rfq_routes.py) from landscape to portrait A4; suppliers now listed VERTICALLY (rows) under each item block. Verified with RFQ-0001 (7 suppliers, 2 items): no cropping, green TRUE-price highlight intact, freight summary + contacts intact. Needs redeploy.
+
+### RFQs page auto-refresh (Aug 2026) — DONE ✅ (verified: polling request fires)
+Material RFQs list auto-refreshes every 30s (silent background poll, no page reload). If the response-view dialog is open, its data refreshes too. File: RFQs.js. Needs redeploy.
