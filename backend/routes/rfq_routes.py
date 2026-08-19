@@ -177,23 +177,17 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
     S_C = ParagraphStyle('c', fontName='Helvetica', fontSize=8, leading=10)
     S_CB = ParagraphStyle('cb', fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.white)
 
-    page = landscape(A4) if len(responses) > 3 else A4
+    page = A4
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=page, topMargin=1.4 * cm, bottomMargin=1.4 * cm,
                             leftMargin=1.4 * cm, rightMargin=1.4 * cm)
+    S_IH = ParagraphStyle('ih', fontName='Helvetica-Bold', fontSize=10.5, spaceBefore=10, spaceAfter=4)
     story = [
         Paragraph(f"{(company.get('company_name') or '').upper()} — SUPPLIER PRICE COMPARISON", S_T),
         Paragraph(f"{rfq.get('rfq_number')} · {rfq.get('title')} · "
                   f"{len(responses)} supplier response(s) · Printed {datetime.now(timezone.utc).strftime('%d/%m/%Y')}", S_M),
     ]
 
-    header = [Paragraph('Code', S_CB), Paragraph('Material / Description', S_CB),
-              Paragraph('Size', S_CB), Paragraph('Qty', S_CB)]
-    for r in responses:
-        header.append(Paragraph((r.get('supplier_company') or '')[:40], S_CB))
-
-    rows = [header]
-    best_cells = []  # (row, col) of cheapest per row
     # Per-response charge spread: (freight + extras) / total quoted units — INTERNAL true cost
     spread = {}
     for r in responses:
@@ -201,78 +195,87 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
         units = sum((x.get('quoted_quantity') or 0) for x in (r.get('items') or [])
                     if x.get('price') is not None or x.get('alternative_price') is not None)
         spread[r['id']] = charges / units if units > 0 else 0
-    for ri, item in enumerate(rfq.get('items', []), start=1):
-        row = [Paragraph(item.get('code') or '—', S_C),
-               Paragraph(item.get('description') or '', S_C),
-               Paragraph(item.get('size') or '', S_C),
-               Paragraph(str(item.get('quantity') or ''), S_C)]
-        prices = []
+
+    header = [Paragraph(h, S_CB) for h in ('Supplier', 'Qty Quoted', 'Price ea', 'Charges /unit', 'TRUE $ ea', 'Alt / Notes')]
+    widths = [4.6 * cm, 1.9 * cm, 2.1 * cm, 2.1 * cm, 2.1 * cm, 5.4 * cm]
+
+    for i, item in enumerate(rfq.get('items', []), start=1):
+        head = f"{i}. {item.get('description') or ''}"
+        meta = ' · '.join(filter(None, [
+            f"Code: {item['code']}" if item.get('code') else '',
+            item.get('size') or '', f"Qty requested: {item.get('quantity')}"]))
+        story.append(Paragraph(f"{head} <font size=8 color='#555555'>({meta})</font>", S_IH))
+        rows = [header]
+        trues = []
         for r in responses:
             ir = next((x for x in (r.get('items') or []) if x.get('item_id') == item.get('id')), None)
+            name = Paragraph((r.get('supplier_company') or '')[:45], S_C)
             if not ir:
-                row.append(Paragraph('—', S_C)); prices.append(None); continue
-            parts = []
-            if ir.get('price') is not None:
-                parts.append(f"${ir['price']:.2f} ea")
-            if ir.get('quoted_quantity') is not None:
-                qq = ir['quoted_quantity']
-                req = item.get('quantity')
-                tag = f"Qty quoted: {qq:g}" + (f" of {req:g}" if req and float(qq) != float(req) else "")
-                parts.append(tag)
+                rows.append([name, Paragraph('—', S_C), Paragraph('—', S_C), Paragraph('—', S_C), Paragraph('—', S_C), Paragraph('No response for this item', S_C)])
+                trues.append(None); continue
+            qq = ir.get('quoted_quantity')
+            req = item.get('quantity')
+            qtxt = f"{qq:g}" + (f" of {req:g}" if qq is not None and req and float(qq) != float(req) else "") if qq is not None else '—'
+            base = ir.get('price') if ir.get('price') is not None else ir.get('alternative_price')
+            sp = spread.get(r['id'], 0)
+            true_unit = base + sp if base is not None else None
+            notes = []
             if ir.get('available') is False and not ir.get('alternative_size'):
-                parts.append('N/A')
+                notes.append('N/A — size not available')
             if ir.get('alternative_size'):
                 alt = f"ALT: {ir['alternative_size']}"
                 if ir.get('alternative_price') is not None:
                     alt += f" @ ${ir['alternative_price']:.2f}"
-                parts.append(alt)
+                notes.append(alt)
             if ir.get('notes'):
-                parts.append(ir['notes'][:60])
-            base_price = ir.get('price') if ir.get('price') is not None else ir.get('alternative_price')
-            true_unit = None
-            if base_price is not None:
-                true_unit = base_price + spread.get(r['id'], 0)
-                if spread.get(r['id'], 0) > 0:
-                    parts.append(f"<b>True: ${true_unit:.2f} ea incl. charges</b>")
-            row.append(Paragraph('<br/>'.join(parts) or '—', S_C))
-            prices.append(true_unit)
-        valid = [p for p in prices if p is not None]
+                notes.append(ir['notes'][:80])
+            rows.append([
+                name, Paragraph(qtxt, S_C),
+                Paragraph(f"${ir['price']:.2f}" if ir.get('price') is not None else '—', S_C),
+                Paragraph(f"${sp:.2f}" if sp > 0 else '—', S_C),
+                Paragraph(f"<b>${true_unit:.2f}</b>" if true_unit is not None else '—', S_C),
+                Paragraph('<br/>'.join(notes) or '—', S_C),
+            ])
+            trues.append(true_unit)
+        t = Table(rows, colWidths=widths, repeatRows=1)
+        style = [
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5),
+        ]
+        valid = [p for p in trues if p is not None]
         if valid:
             best = min(valid)
-            for ci, p in enumerate(prices):
+            for riw, p in enumerate(trues, start=1):
                 if p is not None and abs(p - best) < 0.005:
-                    best_cells.append((ri, 4 + ci))
-        rows.append(row)
+                    style.append(('BACKGROUND', (0, riw), (-1, riw), colors.HexColor('#DCFCE7')))
+        t.setStyle(TableStyle(style))
+        story.append(t)
 
-    # Freight & other charges rows
+    # Freight & other charges summary (suppliers down)
     if any(r.get('freight') is not None or (r.get('extra_costs') or []) for r in responses):
-        frow = [Paragraph('', S_C), Paragraph('Freight', S_CB2 := ParagraphStyle('cb2', fontName='Helvetica-Bold', fontSize=8, leading=10)), Paragraph('', S_C), Paragraph('', S_C)]
-        for r in responses:
-            frow.append(Paragraph(f"${r['freight']:.2f}" if r.get('freight') is not None else '—', S_C))
-        rows.append(frow)
-        erow = [Paragraph('', S_C), Paragraph('Other charges', S_CB2), Paragraph('', S_C), Paragraph('', S_C)]
+        story.append(Paragraph('Freight &amp; Other Charges by Supplier', S_IH))
+        frows = [[Paragraph(h, S_CB) for h in ('Supplier', 'Freight', 'Other charges', 'Spread /unit')]]
         for r in responses:
             extras = r.get('extra_costs') or []
-            txt = '<br/>'.join(f"{(c.get('label') or 'Charge')}: ${c['amount']:.2f}" if c.get('amount') is not None else (c.get('label') or '')
-                               for c in extras) or '—'
-            erow.append(Paragraph(txt, S_C))
-        rows.append(erow)
+            etxt = '<br/>'.join(f"{(c.get('label') or 'Charge')}: ${c['amount']:.2f}" if c.get('amount') is not None else (c.get('label') or '')
+                                for c in extras) or '—'
+            frows.append([
+                Paragraph((r.get('supplier_company') or '')[:45], S_C),
+                Paragraph(f"${r['freight']:.2f}" if r.get('freight') is not None else '—', S_C),
+                Paragraph(etxt, S_C),
+                Paragraph(f"${spread.get(r['id'], 0):.2f}" if spread.get(r['id'], 0) > 0 else '—', S_C),
+            ])
+        ft = Table(frows, colWidths=[5.2 * cm, 2.6 * cm, 7.4 * cm, 3.0 * cm], repeatRows=1)
+        ft.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5),
+        ]))
+        story.append(ft)
 
-    usable = page[0] - 2.8 * cm
-    fixed = [1.6 * cm, 5.2 * cm, 3.0 * cm, 1.1 * cm]
-    sup_w = max((usable - sum(fixed)) / max(len(responses), 1), 2.5 * cm)
-    t = Table(rows, colWidths=fixed + [sup_w] * len(responses), repeatRows=1)
-    style = [
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.black),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-    ]
-    for (r_, c_) in best_cells:
-        style.append(('BACKGROUND', (c_, r_), (c_, r_), colors.HexColor('#DCFCE7')))
-    t.setStyle(TableStyle(style))
-    story.append(t)
     story.append(Spacer(1, 0.4 * cm))
     story.append(Paragraph('Green = lowest TRUE unit price per line (freight + other charges spread across quoted sheets, alternatives included). '
                            'ALT = supplier-offered alternative size. N/A = size not available. INTERNAL DOCUMENT — not for suppliers.', S_M))
