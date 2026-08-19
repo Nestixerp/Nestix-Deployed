@@ -231,15 +231,17 @@ export default function RFQs() {
                     </div>
                     <table className="w-full text-xs border">
                       <thead><tr className="bg-slate-100 text-left">
-                        <th className="p-1.5">Item</th><th className="p-1.5">Requested Size</th><th className="p-1.5 text-right">Price</th><th className="p-1.5">Alternative Offered</th><th className="p-1.5">Notes</th>
+                        <th className="p-1.5">Item</th><th className="p-1.5">Requested Size</th><th className="p-1.5 text-right">Qty Quoted</th><th className="p-1.5 text-right">Price</th><th className="p-1.5">Alternative Offered</th><th className="p-1.5">Notes</th>
                       </tr></thead>
                       <tbody>
                         {(resp.items || []).map((ri2, ii) => {
                           const src = (viewRfq.items || []).find(x => x.id === ri2.item_id) || {};
+                          const short = ri2.quoted_quantity != null && src.quantity != null && Number(ri2.quoted_quantity) < Number(src.quantity);
                           return (
                             <tr key={ii} className="border-t">
                               <td className="p-1.5">{src.code ? <span className="font-mono text-slate-500">[{src.code}] </span> : ''}{src.description} <span className="text-slate-400">x{src.quantity}</span></td>
                               <td className="p-1.5">{src.size}</td>
+                              <td className={`p-1.5 text-right ${short ? 'text-red-600 font-semibold' : ''}`}>{ri2.quoted_quantity != null ? `${ri2.quoted_quantity}${short ? ` of ${src.quantity}` : ''}` : '—'}</td>
                               <td className="p-1.5 text-right font-semibold">{ri2.available === false && !ri2.alternative_size ? <span className="text-red-600">N/A</span> : (ri2.price != null ? `$${Number(ri2.price).toFixed(2)}` : '—')}</td>
                               <td className="p-1.5">{ri2.alternative_size ? <span className="text-amber-700">{ri2.alternative_size}{ri2.alternative_price != null ? ` @ $${Number(ri2.alternative_price).toFixed(2)}` : ''}</span> : '—'}</td>
                               <td className="p-1.5 text-slate-600">{ri2.notes || ''}</td>

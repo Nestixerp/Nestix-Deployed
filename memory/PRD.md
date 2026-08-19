@@ -1054,3 +1054,8 @@ Supplier response now supports: Freight (ex GST), TWO blank "other cost" rows (d
 - Internal responses view shows freight/extras chips + 📎 attachment download button.
 - Comparison PDF adds Freight and Other charges rows per supplier.
 Files: rfq_routes.py, PublicRFQ.js, RFQs.js. Needs redeploy.
+
+### RFQ: quoted quantity + true landed unit price (Aug 2026) — DONE ✅ (E2E tested incl. user's exact example)
+1. MANDATORY "Qty you are quoting" per priced item (prefilled with requested qty). Enforced in public page, offline HTML form, AND backend (400). Internal view shows "Qty Quoted" column, red when short (e.g. "8 of 10").
+2. INTERNAL-ONLY true unit price on the comparison PDF: (freight + all extra charges) / total quoted units, added to each unit price → "True: $X ea incl. charges". Green best-price highlight now uses TRUE price. Verified user's example: $100 sheet, qty 2, $85 freight + $50 pallet → True $167.50. Legend marks sheet INTERNAL DOCUMENT. Not shown to suppliers anywhere.
+Files: rfq_routes.py, PublicRFQ.js, RFQs.js. Needs redeploy.

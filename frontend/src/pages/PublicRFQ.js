@@ -32,7 +32,7 @@ export default function PublicRFQ() {
       .then(r => {
         setRfq(r.data);
         const init = {};
-        (r.data.items || []).forEach(it => { init[it.id] = { price: '', available: true, alternative_size: '', alternative_price: '', notes: '', offerAlt: false }; });
+        (r.data.items || []).forEach(it => { init[it.id] = { price: '', quoted_quantity: String(it.quantity || ''), available: true, alternative_size: '', alternative_price: '', notes: '', offerAlt: false }; });
         setLines(init);
       })
       .catch(() => setError('This enquiry link is not valid.'));
@@ -52,9 +52,18 @@ export default function PublicRFQ() {
   const submit = async () => {
     setValidationError('');
     if (!supplier.supplier_company.trim()) { setValidationError('Please enter your company name.'); return; }
+    for (const [iid, l] of Object.entries(lines)) {
+      const priced = l.price !== '' || (l.offerAlt && l.alternative_price !== '');
+      if (priced && (!l.quoted_quantity || parseFloat(l.quoted_quantity) <= 0)) {
+        const idx = (rfq.items || []).findIndex(x => x.id === iid);
+        setValidationError(`Please enter the quantity you are quoting for item ${idx + 1}.`);
+        return;
+      }
+    }
     const items = Object.entries(lines).map(([item_id, l]) => ({
       item_id,
       price: l.price !== '' ? parseFloat(l.price) : null,
+      quoted_quantity: l.quoted_quantity !== '' ? parseFloat(l.quoted_quantity) : null,
       available: l.available,
       alternative_size: l.offerAlt ? l.alternative_size : '',
       alternative_price: l.offerAlt && l.alternative_price !== '' ? parseFloat(l.alternative_price) : null,
@@ -160,6 +169,9 @@ export default function PublicRFQ() {
                     <Input type="number" step="0.01" min="0" placeholder="0.00" data-testid={`price-input-${idx}`}
                       value={l.price} disabled={!l.available && !l.offerAlt}
                       onChange={e => setLine(it.id, 'price', e.target.value)} />
+                    <label className="text-xs font-medium mt-1 block">Qty you are quoting *</label>
+                    <Input type="number" step="1" min="0" data-testid={`quoted-qty-${idx}`}
+                      value={l.quoted_quantity} onChange={e => setLine(it.id, 'quoted_quantity', e.target.value)} />
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-4 text-sm">

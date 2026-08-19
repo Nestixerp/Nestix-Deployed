@@ -46,6 +46,7 @@ class RFQIn(BaseModel):
 class ResponseItem(BaseModel):
     item_id: str
     price: Optional[float] = None
+    quoted_quantity: Optional[float] = None
     available: bool = True
     alternative_size: Optional[str] = ""
     alternative_price: Optional[float] = None
@@ -193,6 +194,13 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
 
     rows = [header]
     best_cells = []  # (row, col) of cheapest per row
+    # Per-response charge spread: (freight + extras) / total quoted units — INTERNAL true cost
+    spread = {}
+    for r in responses:
+        charges = (r.get('freight') or 0) + sum((c.get('amount') or 0) for c in (r.get('extra_costs') or []))
+        units = sum((x.get('quoted_quantity') or 0) for x in (r.get('items') or [])
+                    if x.get('price') is not None or x.get('alternative_price') is not None)
+        spread[r['id']] = charges / units if units > 0 else 0
     for ri, item in enumerate(rfq.get('items', []), start=1):
         row = [Paragraph(item.get('code') or '—', S_C),
                Paragraph(item.get('description') or '', S_C),
@@ -206,6 +214,11 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
             parts = []
             if ir.get('price') is not None:
                 parts.append(f"${ir['price']:.2f} ea")
+            if ir.get('quoted_quantity') is not None:
+                qq = ir['quoted_quantity']
+                req = item.get('quantity')
+                tag = f"Qty quoted: {qq:g}" + (f" of {req:g}" if req and float(qq) != float(req) else "")
+                parts.append(tag)
             if ir.get('available') is False and not ir.get('alternative_size'):
                 parts.append('N/A')
             if ir.get('alternative_size'):
@@ -215,9 +228,14 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
                 parts.append(alt)
             if ir.get('notes'):
                 parts.append(ir['notes'][:60])
+            base_price = ir.get('price') if ir.get('price') is not None else ir.get('alternative_price')
+            true_unit = None
+            if base_price is not None:
+                true_unit = base_price + spread.get(r['id'], 0)
+                if spread.get(r['id'], 0) > 0:
+                    parts.append(f"<b>True: ${true_unit:.2f} ea incl. charges</b>")
             row.append(Paragraph('<br/>'.join(parts) or '—', S_C))
-            comparable = ir.get('price') if ir.get('price') is not None else ir.get('alternative_price')
-            prices.append(comparable)
+            prices.append(true_unit)
         valid = [p for p in prices if p is not None]
         if valid:
             best = min(valid)
@@ -256,8 +274,8 @@ async def export_comparison_pdf(rfq_id: str, current_user=Depends(get_current_us
     t.setStyle(TableStyle(style))
     story.append(t)
     story.append(Spacer(1, 0.4 * cm))
-    story.append(Paragraph('Green = lowest comparable price per line (alternatives included). '
-                           'ALT = supplier-offered alternative size. N/A = size not available.', S_M))
+    story.append(Paragraph('Green = lowest TRUE unit price per line (freight + other charges spread across quoted sheets, alternatives included). '
+                           'ALT = supplier-offered alternative size. N/A = size not available. INTERNAL DOCUMENT — not for suppliers.', S_M))
     for r in responses:
         contact = ' · '.join(filter(None, [r.get('contact_name'), r.get('email'), r.get('phone')]))
         note = f" — {r['overall_notes']}" if r.get('overall_notes') else ''
@@ -300,6 +318,7 @@ async def export_offline_html(rfq_id: str, request: Request, origin: Optional[st
         <span class="meta">{('Code: ' + esc(it.get('code')) + ' · ') if it.get('code') else ''}{('Material: ' + esc(it.get('material_type')) + ' · ') if it.get('material_type') else ''}{('Size: ' + esc(it.get('size')) + ' · ') if it.get('size') else ''}Qty: {it.get('quantity')}</span>
       </div>
       <label>Your Price (ea, ex GST) $ <input type="number" step="0.01" min="0" class="price"></label>
+      <label>Qty you are quoting <span class="req">*</span> <input type="number" step="1" min="0" class="qqty" value="{it.get('quantity')}"></label>
       <label><input type="checkbox" class="na"> Size not available</label>
       <label><input type="checkbox" class="altchk" onchange="this.closest('.item').querySelector('.altbox').style.display=this.checked?'block':'none'"> Offer alternative size</label>
       <div class="altbox" style="display:none">
@@ -369,11 +388,18 @@ async function submitPricing(){{
   var items=[].map.call(document.querySelectorAll('.item'),function(el){{
     return {{item_id:el.dataset.id,
       price:el.querySelector('.price').value?parseFloat(el.querySelector('.price').value):null,
+      quoted_quantity:el.querySelector('.qqty').value?parseFloat(el.querySelector('.qqty').value):null,
       available:!el.querySelector('.na').checked,
       alternative_size:el.querySelector('.altchk').checked?el.querySelector('.altsize').value:'',
       alternative_price:(el.querySelector('.altchk').checked&&el.querySelector('.altprice').value)?parseFloat(el.querySelector('.altprice').value):null,
       notes:el.querySelector('.inotes').value}};
   }});
+  for(var m=0;m<items.length;m++){{
+    var it=items[m];
+    if((it.price!=null||it.alternative_price!=null)&&!(it.quoted_quantity>0)){{
+      err.textContent='Please enter the quantity you are quoting for item '+(m+1)+'.';return;
+    }}
+  }}
   var payload={{supplier_company:company,contact_name:document.getElementById('s_contact').value,
     email:document.getElementById('s_email').value,phone:document.getElementById('s_phone').value,
     overall_notes:document.getElementById('s_notes').value,
@@ -430,6 +456,10 @@ async def public_respond(token: str, payload: SupplierResponse):
         raise HTTPException(400, "Attachment too large (max 5 MB)")
     valid_ids = {it["id"] for it in rfq.get("items", [])}
     items = [it.model_dump() for it in payload.items if it.item_id in valid_ids]
+    for it in items:
+        priced = it.get("price") is not None or it.get("alternative_price") is not None
+        if priced and not (it.get("quoted_quantity") and it["quoted_quantity"] > 0):
+            raise HTTPException(400, "Please enter the quantity you are quoting for each priced item")
     doc = {
         "id": str(uuid.uuid4()),
         "rfq_id": rfq["id"],
