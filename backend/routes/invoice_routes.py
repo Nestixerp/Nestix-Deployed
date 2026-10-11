@@ -496,7 +496,7 @@ async def get_packing_slips_by_po(
     packing_slips = await db.packing_slips.find({
         "customer_po_number": po_number,
         "status": "Completed"
-    }).to_list(length=None)
+    }, {"_id": 0}).to_list(length=None)
     
     # Check which packing slips are already invoiced
     invoices = await db.invoices.find({

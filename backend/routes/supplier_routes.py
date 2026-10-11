@@ -33,7 +33,7 @@ async def generate_supplier_code():
         last_num = int(last_code.split('-')[1])
         new_num = last_num + 1
         return f"SUP-{new_num:04d}"
-    except:
+    except Exception:
         return "SUP-0001"
 
 # Supplier CRUD Operations

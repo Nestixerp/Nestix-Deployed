@@ -62,6 +62,7 @@ class ActionDetail(BaseModel):
 
 class AgendaRow(BaseModel):
     agenda_no: int                       # 1-14
+    agenda_text: Optional[str] = ""      # snapshot of agenda wording at time of meeting
     # New: multiple action lines per agenda item. Each line tracks its own
     # owner, due date and completion status so a single agenda topic can have
     # several follow-ups (e.g. "Audit complete = Yes" + "Next audit due Sep").
@@ -96,8 +97,37 @@ class ManagementReviewIn(BaseModel):
 
 @router.get("/agenda-template")
 async def get_agenda_template(current_user=Depends(get_current_user)):
-    """Return the fixed 14-item agenda used to seed new meetings."""
-    return {"agenda": STANDARD_AGENDA}
+    """Return the agenda used to seed new meetings (custom if saved, else standard)."""
+    settings = await db[SETTINGS_COLL].find_one({"_id": SETTINGS_DOC_ID})
+    custom = (settings or {}).get("agenda")
+    return {"agenda": custom or STANDARD_AGENDA, "is_custom": bool(custom), "default_agenda": STANDARD_AGENDA}
+
+
+class AgendaTemplateIn(BaseModel):
+    agenda: List[str]
+
+
+@router.put("/agenda-template")
+async def update_agenda_template(payload: AgendaTemplateIn, current_user=Depends(get_current_user)):
+    items = [(t or "").strip() for t in payload.agenda if (t or "").strip()]
+    if not items:
+        raise HTTPException(status_code=400, detail="Agenda must contain at least one item")
+    await db[SETTINGS_COLL].update_one(
+        {"_id": SETTINGS_DOC_ID},
+        {"$set": {
+            "agenda": items,
+            "agenda_updated_at": datetime.now(timezone.utc).isoformat(),
+            "agenda_updated_by": _user_label(current_user),
+        }},
+        upsert=True,
+    )
+    return {"agenda": items, "is_custom": True}
+
+
+@router.delete("/agenda-template")
+async def reset_agenda_template(current_user=Depends(get_current_user)):
+    await db[SETTINGS_COLL].update_one({"_id": SETTINGS_DOC_ID}, {"$unset": {"agenda": ""}})
+    return {"agenda": STANDARD_AGENDA, "is_custom": False}
 
 
 @router.get("")
@@ -269,12 +299,19 @@ async def get_meeting(meeting_id: str, current_user=Depends(get_current_user)):
 
 @router.post("")
 async def create_meeting(payload: ManagementReviewIn, current_user=Depends(get_current_user)):
-    # If the caller didn't pre-seed agenda_rows, seed the 14 standard items.
+    settings = await db[SETTINGS_COLL].find_one({"_id": SETTINGS_DOC_ID})
+    agenda = (settings or {}).get("agenda") or STANDARD_AGENDA
+    # If the caller didn't pre-seed agenda_rows, seed from the current agenda template.
     rows = payload.agenda_rows or [
-        AgendaRow(agenda_no=i + 1) for i in range(len(STANDARD_AGENDA))
+        AgendaRow(agenda_no=i + 1, agenda_text=t) for i, t in enumerate(agenda)
     ]
     doc = payload.model_dump()
     doc["agenda_rows"] = [r.model_dump() if hasattr(r, "model_dump") else r for r in rows]
+    # Snapshot agenda wording so later template edits never rewrite past minutes.
+    for r in doc["agenda_rows"]:
+        if not r.get("agenda_text"):
+            idx = (r.get("agenda_no") or 0) - 1
+            r["agenda_text"] = agenda[idx] if 0 <= idx < len(agenda) else ""
     doc.update({
         "id": str(uuid.uuid4()),
         "created_at": datetime.now(timezone.utc).isoformat(),

@@ -36,7 +36,7 @@ async def generate_employee_number():
         try:
             last_num = int(last_employee['employee_number'].replace('EMP-', ''))
             next_num = last_num + 1
-        except:
+        except Exception:
             next_num = 1
     else:
         next_num = 1
@@ -91,6 +91,17 @@ async def get_all_employees(current_user: dict = Depends(get_current_user)):
         emp.pop('password', None)
     
     return [Employee(**emp) for emp in employees]
+
+@router.get("/leave-requests", response_model=List[LeaveRequest])
+async def get_all_leave_requests(current_user: dict = Depends(get_current_user)):
+    """Get all leave requests"""
+    requests = await db.leave_requests.find().sort("created_at", -1).to_list(length=None)
+    return [LeaveRequest(**req) for req in requests]
+
+@router.get("/modules")
+async def get_available_modules(current_user: dict = Depends(get_current_user)):
+    """Get list of available modules"""
+    return {"modules": AVAILABLE_MODULES}
 
 @router.get("/{employee_id}", response_model=Employee)
 async def get_employee(
@@ -290,12 +301,6 @@ async def create_leave_request(
     
     return LeaveRequest(**leave_dict)
 
-@router.get("/leave-requests", response_model=List[LeaveRequest])
-async def get_all_leave_requests(current_user: dict = Depends(get_current_user)):
-    """Get all leave requests"""
-    requests = await db.leave_requests.find().sort("created_at", -1).to_list(length=None)
-    return [LeaveRequest(**req) for req in requests]
-
 @router.get("/leave-requests/employee/{employee_id}")
 async def get_employee_leave_requests(
     employee_id: str,
@@ -351,8 +356,3 @@ async def update_leave_request(
     )
     
     return {"message": "Leave request updated successfully"}
-
-@router.get("/modules")
-async def get_available_modules(current_user: dict = Depends(get_current_user)):
-    """Get list of available modules"""
-    return {"modules": AVAILABLE_MODULES}

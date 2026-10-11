@@ -43,7 +43,7 @@ try:
     else:
         FONT_NORMAL = 'Calibri'
         FONT_BOLD = 'Calibri-Bold'
-except:
+except Exception:
     # If any error, use Helvetica
     FONT_NORMAL = 'Helvetica'
     FONT_BOLD = 'Helvetica-Bold'
@@ -466,7 +466,7 @@ def generate_audit_pdf(audit_data, findings_data, samples_data=None):
                     if plain_text and plain_text.strip():
                         finding_content.append(Paragraph(plain_text, finding_text_style))
                         finding_content.append(Spacer(1, 6))
-                except:
+                except Exception:
                     pass  # Skip if we can't process evidence
         
         # Summary (renamed from Findings)
@@ -489,7 +489,7 @@ def generate_audit_pdf(audit_data, findings_data, samples_data=None):
                     from reportlab.lib.utils import simpleSplit
                     plain_text = html.unescape(re.sub('<[^<]+?>', '', finding['findings']))
                     finding_content.append(Paragraph(plain_text or "Unable to process summary", finding_text_style))
-                except:
+                except Exception:
                     finding_content.append(Paragraph("[Unable to process summary content]", finding_text_style))
         
         # NCR Details (if applicable)
@@ -503,7 +503,7 @@ def generate_audit_pdf(audit_data, findings_data, samples_data=None):
                         ncr_date_obj = ncr_date_str
                     formatted_ncr_date = ncr_date_obj.strftime('%d/%m/%Y')
                     finding_content.append(Paragraph(f"<b>NCR Date:</b> {formatted_ncr_date}", finding_text_style))
-                except:
+                except Exception:
                     pass
             
             if finding.get('ncr_customer_supplier'):
@@ -649,7 +649,7 @@ def parse_clause_number(clause_num_str):
             return (float(parts[0]), float(parts[1]))
         else:
             return (float(parts[0]), float('.'.join(parts[1:])))
-    except:
+    except Exception:
         return (0, 0)
 
 

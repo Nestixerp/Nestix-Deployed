@@ -238,7 +238,7 @@ async def get_cutting_parameters(
     """Get all cutting parameters for feed rate lookup"""
     check_module_access(current_user, "quotes")
     
-    params = await db.cutting_parameters.find({}).to_list(1000)
+    params = await db.cutting_parameters.find({}, {"_id": 0}).to_list(1000)
     return params
 
 # Get feed rate for specific material and thickness

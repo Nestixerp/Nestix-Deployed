@@ -257,7 +257,6 @@ async def debug_time_entries(current_user: dict = Depends(get_current_user)):
     }).to_list(length=None)
     
     # Get recent entries (last 24 hours)
-    from datetime import timedelta
     recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     recent_entries = await db.time_entries.find({
         "created_at": {"$gte": recent_cutoff.isoformat()}

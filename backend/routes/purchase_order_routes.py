@@ -36,7 +36,7 @@ async def generate_po_number():
         last_num = int(last_po.split('-')[2])
         new_num = last_num + 1
         return f"PO-{current_year}-{new_num:04d}"
-    except:
+    except Exception:
         return f"PO-{current_year}-0001"
 
 @router.post("", response_model=PurchaseOrder, status_code=status.HTTP_201_CREATED)
@@ -303,13 +303,6 @@ async def email_purchase_order(
     return {
         "success": True,
         "message": f"PO {po['po_number']} email sent to {email_data.get('contact_name')}"
-    }
-    await supplier_service.update_supplier_metrics(po["supplier_id"])
-    
-    return {
-        "message": "Purchase order received successfully",
-        "status": new_status,
-        "days_late": days_late
     }
 
 @router.delete("/{po_id}", status_code=status.HTTP_204_NO_CONTENT)

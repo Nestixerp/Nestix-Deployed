@@ -66,7 +66,7 @@ async def get_next_jsa_number():
         try:
             last_num = int(last_jsa['jsa_number'].split('-')[1])
             next_num = last_num + 1
-        except:
+        except Exception:
             next_num = 1
     else:
         next_num = 1
@@ -149,7 +149,7 @@ async def get_jsas(
             if field in jsa and jsa[field]:
                 try:
                     jsa[field] = datetime.fromisoformat(jsa[field])
-                except:
+                except Exception:
                     pass
     
     return jsas
@@ -171,7 +171,7 @@ async def get_jsa(
         if field in jsa and jsa[field]:
             try:
                 jsa[field] = datetime.fromisoformat(jsa[field])
-            except:
+            except Exception:
                 pass
     
     return jsa

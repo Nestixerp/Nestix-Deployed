@@ -31,7 +31,7 @@ def parse_from_mongo(item: dict) -> dict:
         if field in item and isinstance(item[field], str):
             try:
                 item[field] = datetime.fromisoformat(item[field])
-            except:
+            except Exception:
                 pass
     return item
 
@@ -46,7 +46,7 @@ async def get_next_job_sheet_number():
         try:
             last_num = int(last_job_sheet['job_sheet_number'].split('-')[1])
             next_num = last_num + 1
-        except:
+        except Exception:
             next_num = 1
     else:
         next_num = 1

@@ -7,7 +7,8 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
-import { Save, ArrowLeft, Printer, Trash2, Plus } from 'lucide-react';
+import { Save, ArrowLeft, Printer, Trash2, Plus, ListChecks } from 'lucide-react';
+import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { formatDate } from '../utils/dateFormatter';
 import {
   buildDocControlFooter,
@@ -32,6 +33,7 @@ const normalizeRow = (row, agendaNo) => {
   const hasLegacy = row && (row.minutes || row.action_by_whom || row.action_when || row.completed);
   return {
     agenda_no: row?.agenda_no || agendaNo,
+    agenda_text: row?.agenda_text || '',
     actions: [hasLegacy
       ? {
           minutes: row.minutes || '',
@@ -48,8 +50,9 @@ const emptyMeeting = (agenda = []) => ({
   attendees: '',
   apologies: '',
   company_name: 'ULTIMATE LASER PTY.LTD.',
-  agenda_rows: agenda.map((_, i) => ({
+  agenda_rows: agenda.map((text, i) => ({
     agenda_no: i + 1,
+    agenda_text: text,
     actions: [emptyAction()],
   })),
   carryover_items: [],
@@ -79,6 +82,7 @@ export default function ManagementReviewForm() {
   const [recordId, setRecordId] = useState(null);
   const [loadingCarry, setLoadingCarry] = useState(false);
   const [phrases, setPhrases] = useState({}); // { "8": [{text, count}], ... }
+  const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
 
   // Load agenda template + (when editing) the existing meeting
   useEffect(() => {
@@ -109,12 +113,17 @@ export default function ManagementReviewForm() {
           }
         } else {
           const data = (await api.get(`/management-review/${id}`)).data || {};
-          // Ensure exactly 14 rows and migrate legacy single-line data into the
-          // new actions: [...] shape.
-          const rows = tmpl.map((_, i) => {
-            const existing = (data.agenda_rows || []).find((r) => r.agenda_no === i + 1);
-            return normalizeRow(existing, i + 1);
-          });
+          const existingRows = data.agenda_rows || [];
+          // Meetings saved with an agenda_text snapshot keep their own agenda
+          // (even if the template changed since). Legacy meetings map onto the
+          // current template by number.
+          const hasSnapshot = existingRows.some((r) => r.agenda_text);
+          const rows = hasSnapshot
+            ? existingRows.map((r, i) => normalizeRow(r, r.agenda_no || i + 1))
+            : tmpl.map((t, i) => {
+                const existing = existingRows.find((r) => r.agenda_no === i + 1);
+                return { ...normalizeRow(existing, i + 1), agenda_text: t };
+              });
           setForm({ ...emptyMeeting(tmpl), ...data, agenda_rows: rows, carryover_items: data.carryover_items || [] });
           setRecordId(data.id);
         }
@@ -202,6 +211,23 @@ export default function ManagementReviewForm() {
     }
   };
 
+  // ---- editable agenda template -------------------------------------------
+  const handleAgendaSaved = (newAgenda, mapping, applyToCurrent) => {
+    setAgendaTemplate(newAgenda);
+    const unsavedNew = isNew && !recordId;
+    if (unsavedNew || applyToCurrent) {
+      setForm((f) => ({
+        ...f,
+        agenda_rows: newAgenda.map((text, i) => {
+          const oi = mapping[i];
+          const old = oi != null ? f.agenda_rows[oi] : null;
+          return { agenda_no: i + 1, agenda_text: text, actions: old?.actions || [emptyAction()] };
+        }),
+      }));
+      if (!unsavedNew) toast.info('Agenda applied to this meeting — remember to Save');
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -279,14 +305,14 @@ export default function ManagementReviewForm() {
               </table>`;
           return `
             <tr>
-              <td style="vertical-align:top;"><strong>${row.agenda_no}.</strong> ${esc(agendaTemplate[i] || '')}</td>
+              <td style="vertical-align:top;"><strong>${row.agenda_no}.</strong> ${esc(row.agenda_text || agendaTemplate[i] || '')}</td>
               <td colspan="4" style="vertical-align:top;padding:3px 4px;">${carryBody}</td>
             </tr>
           `;
         }
         return row.actions.map((action, ai) => `
           <tr>
-            ${ai === 0 ? `<td rowspan="${row.actions.length}" style="vertical-align:top;"><strong>${row.agenda_no}.</strong> ${esc(agendaTemplate[i] || '')}</td>` : ''}
+            ${ai === 0 ? `<td rowspan="${row.actions.length}" style="vertical-align:top;"><strong>${row.agenda_no}.</strong> ${esc(row.agenda_text || agendaTemplate[i] || '')}</td>` : ''}
             <td style="vertical-align:top;white-space:pre-wrap;">${esc(action.minutes)}</td>
             <td style="vertical-align:top;text-align:center;">${esc(action.action_by_whom)}</td>
             <td style="vertical-align:top;text-align:center;">${esc(action.action_when)}</td>
@@ -414,7 +440,12 @@ export default function ManagementReviewForm() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Agenda &amp; Minutes</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle>Agenda &amp; Minutes</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => setAgendaEditorOpen(true)} data-testid="edit-agenda-btn">
+            <ListChecks className="h-4 w-4 mr-2" /> Edit Agenda
+          </Button>
+        </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border border-slate-300">
@@ -437,7 +468,7 @@ export default function ManagementReviewForm() {
                     return (
                       <tr key={i} className="border-t">
                         <td className="px-2 py-1 border align-top text-slate-700">
-                          <strong>{row.agenda_no}.</strong> {agendaTemplate[i]}
+                          <strong>{row.agenda_no}.</strong> {row.agenda_text || agendaTemplate[i]}
                         </td>
                         <td colSpan={4} className="px-2 py-2 border align-top">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
@@ -527,7 +558,7 @@ export default function ManagementReviewForm() {
                         <tr key={`${i}-${ai}`} className={ai === 0 ? 'border-t' : ''}>
                           {ai === 0 && (
                             <td className="px-2 py-1 border align-top text-slate-700" rowSpan={row.actions.length}>
-                              <strong>{row.agenda_no}.</strong> {agendaTemplate[i]}
+                              <strong>{row.agenda_no}.</strong> {row.agenda_text || agendaTemplate[i]}
                               <div className="mt-2">
                                 <button
                                   type="button"
@@ -616,6 +647,14 @@ export default function ManagementReviewForm() {
           </div>
         </CardContent>
       </Card>
+
+      <AgendaEditorDialog
+        open={agendaEditorOpen}
+        onOpenChange={setAgendaEditorOpen}
+        agenda={agendaTemplate}
+        showApplyOption={!(isNew && !recordId)}
+        onSaved={handleAgendaSaved}
+      />
 
       <Card>
         <CardContent className="pt-6">

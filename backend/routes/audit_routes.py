@@ -372,8 +372,6 @@ async def generate_audit_report_pdf(report_id: str, current_user: dict = Depends
             detail=f"Error generating PDF: {str(e)}"
         )
 
-    return FollowUpItem(**item_dict)
-
 # ═══════════════ IMS FRAMEWORK EXTENSIONS ═══════════════
 from pydantic import BaseModel as _BM
 from typing import Optional as _Opt

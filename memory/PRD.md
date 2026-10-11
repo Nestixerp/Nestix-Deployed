@@ -1065,3 +1065,6 @@ User reported horizontal cropping with many suppliers. Changed export_comparison
 
 ### RFQs page auto-refresh (Aug 2026) — DONE ✅ (verified: polling request fires)
 Material RFQs list auto-refreshes every 30s (silent background poll, no page reload). If the response-view dialog is open, its data refreshes too. File: RFQs.js. Needs redeploy.
+
+### Management Review — Editable Agenda (Jun 2026) — DONE ✅ (backend curl + UI verified)
+"Edit Agenda" button on the meeting form opens a template editor: edit wording, add, remove, reorder items (item 1 locked — hosts carry-overs), Reset to standard 14. Custom agenda stored in management_review_settings.agenda; GET/PUT/DELETE /api/management-review/agenda-template. Each meeting now snapshots agenda_text per row so past meetings keep their original wording when the template changes. Editor offers "Also apply to this meeting" for in-progress meetings. Files: management_review_routes.py, ManagementReviewForm.js, components/AgendaEditorDialog.js. Needs redeploy.

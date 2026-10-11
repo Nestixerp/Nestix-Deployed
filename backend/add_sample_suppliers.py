@@ -28,7 +28,7 @@ async def get_next_supplier_code(db):
         last_num = int(last_code.split('-')[1])
         new_num = last_num + 1
         return f"SUP-{new_num:04d}"
-    except:
+    except Exception:
         return "SUP-0001"
 
 async def add_suppliers():
