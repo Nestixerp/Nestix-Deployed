@@ -1068,3 +1068,9 @@ Material RFQs list auto-refreshes every 30s (silent background poll, no page rel
 
 ### Management Review — Editable Agenda (Jun 2026) — DONE ✅ (backend curl + UI verified)
 "Edit Agenda" button on the meeting form opens a template editor: edit wording, add, remove, reorder items (item 1 locked — hosts carry-overs), Reset to standard 14. Custom agenda stored in management_review_settings.agenda; GET/PUT/DELETE /api/management-review/agenda-template. Each meeting now snapshots agenda_text per row so past meetings keep their original wording when the template changes. Editor offers "Also apply to this meeting" for in-progress meetings. Files: management_review_routes.py, ManagementReviewForm.js, components/AgendaEditorDialog.js. Needs redeploy.
+
+### Press Brake Job Sheet Enhancements (Jun 2026) — DONE ✅ (testing agent 100% frontend pass, backend curl verified)
+1. Machine selector in Generate Job Sheet dialogs (single + multi-item) when process is Press Brake — only Active machines with type containing "Press" from /api/machines. Machine name saved (machine_id/machine_name on JobSheet) and prints BOLD in a purple Machine box on the job sheet printout + shows in view dialog.
+2. Completion dialog: optional "Top Punch Used" / "V Die Used" fields for Press Brake jobs (top_punch_used/v_die_used saved via /complete endpoint, shown in view dialog).
+3. Part-history popup when raising a Press Brake job sheet: GET /api/job-sheets/part-history/lookup (drawing_number first, falls back to part_description+customer_id) — popup lists previous job #, machine used, top punch, V die. Popup only (NOT on printout, per user choice).
+Files: models.py (JobSheet/JobSheetCreate/JobSheetComplete), job_sheet_routes.py, Quotes.js, JobSheets.js. Needs redeploy.

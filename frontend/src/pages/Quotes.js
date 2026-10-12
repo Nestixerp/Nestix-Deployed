@@ -3082,7 +3082,7 @@ const Quotes = () => {
       
       alert('Job Sheet created successfully!');
       setJobSheetDialogOpen(false);
-      setJobSheetFormData({ quantity: 0, purchase_order_number: '', due_date: '' });
+      setJobSheetFormData({ quantity: 0, purchase_order_number: '', due_date: '', inspection_interval: '', unit_price: 0, unit_price_ex_gst: 0, machine_id: '' });
     } catch (error) {
       console.error('Error creating job sheet:', error);
       console.error('Error response:', error.response);
