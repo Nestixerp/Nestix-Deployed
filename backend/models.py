@@ -1031,6 +1031,10 @@ class JobSheet(BaseModel):
     bend_angles: Optional[str] = None
     tooling_required: Optional[str] = None
     
+    # Machine assignment (Press Brake)
+    machine_id: Optional[str] = None
+    machine_name: Optional[str] = None
+    
     # Status tracking
     status: str = "Pending"  # Pending, In Progress, Completed, On Hold
     assigned_to: Optional[str] = None  # User/operator assigned
@@ -1053,6 +1057,8 @@ class JobSheet(BaseModel):
     quantity_completed: Optional[int] = None  # Parts successfully completed
     quantity_rejected: Optional[int] = None  # Parts rejected
     reject_reason: Optional[str] = None  # Reason for rejection
+    top_punch_used: Optional[str] = None  # Press Brake: top punch used (recorded on completion)
+    v_die_used: Optional[str] = None  # Press Brake: V die used (recorded on completion)
     
     # Quality & Notes
     quality_check_passed: Optional[bool] = None
@@ -1080,6 +1086,9 @@ class JobSheetCreate(BaseModel):
     part_description: Optional[str] = None  # Override part description for line items
     # Quality Assurance Inspection
     inspection_interval: Optional[int] = None  # e.g., every 20 parts
+    # Machine assignment (Press Brake)
+    machine_id: Optional[str] = None
+    machine_name: Optional[str] = None
 
 class JobSheetUpdate(BaseModel):
     quantity: Optional[int] = None
@@ -1110,6 +1119,8 @@ class JobSheetComplete(BaseModel):
     start_time: Optional[datetime] = None  # When operator started
     end_time: datetime  # When operator finished
     production_notes: Optional[str] = None
+    top_punch_used: Optional[str] = None  # Press Brake tooling
+    v_die_used: Optional[str] = None  # Press Brake tooling
 
 
 

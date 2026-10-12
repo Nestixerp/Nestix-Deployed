@@ -66,8 +66,31 @@ const Quotes = () => {
     due_date: '',
     inspection_interval: '',  // Q.A. inspection interval (e.g., every 20 parts)
     unit_price: 0,  // Unit price (can be adjusted)
-    unit_price_ex_gst: 0  // Unit price ex GST
+    unit_price_ex_gst: 0,  // Unit price ex GST
+    machine_id: ''  // Press Brake machine selection
   });
+  
+  // Press Brake machine selection + previous-run part history
+  const [pressBrakeMachines, setPressBrakeMachines] = useState([]);
+  const [partHistory, setPartHistory] = useState([]);
+  const [partHistoryOpen, setPartHistoryOpen] = useState(false);
+  const isPressBrakeProcess = (name) => /press|brake|fold/i.test(name || '');
+  const loadPressBrakeMachines = async () => {
+    try {
+      const res = await api.get('/machines');
+      setPressBrakeMachines((res.data || []).filter(m => /press/i.test(m.machine_type || '') && m.status === 'Active'));
+    } catch { setPressBrakeMachines([]); }
+  };
+  const fetchPartHistoryFor = async (drawingNumber, partDescription, customerId) => {
+    try {
+      const params = {};
+      if (drawingNumber) params.drawing_number = drawingNumber;
+      if (partDescription) params.part_description = partDescription;
+      if (customerId) params.customer_id = customerId;
+      const res = await api.get('/job-sheets/part-history/lookup', { params });
+      return res.data || [];
+    } catch { return []; }
+  };
   const [emailFormData, setEmailFormData] = useState({
     to: '',
     subject: '',
@@ -3005,9 +3028,21 @@ const Quotes = () => {
       due_date: '',
       inspection_interval: '',
       unit_price: unitPriceIncGst.toFixed(2),
-      unit_price_ex_gst: unitPriceExGst.toFixed(2)
+      unit_price_ex_gst: unitPriceExGst.toFixed(2),
+      machine_id: ''
     });
     setJobSheetDialogOpen(true);
+    
+    // Press Brake: load machines + warn if this part was run before
+    if (isPressBrakeProcess(process?.name)) {
+      loadPressBrakeMachines();
+      fetchPartHistoryFor(quote.drawing_number, quote.part_description, quote.customer_id).then(entries => {
+        if (entries.length > 0) {
+          setPartHistory([{ part: quote.part_description, entries }]);
+          setPartHistoryOpen(true);
+        }
+      });
+    }
   };
 
   const handleCreateJobSheet = async () => {
@@ -3022,7 +3057,11 @@ const Quotes = () => {
         // Include adjusted unit price (compute total from ex-GST to avoid GST rounding loss)
         unit_price: parseFloat(jobSheetFormData.unit_price) || 0,
         unit_price_ex_gst: parseFloat(jobSheetFormData.unit_price_ex_gst) || 0,
-        total_value: ((parseFloat(jobSheetFormData.unit_price_ex_gst) || 0) * (parseInt(jobSheetFormData.quantity) || 0)) * 1.10
+        total_value: ((parseFloat(jobSheetFormData.unit_price_ex_gst) || 0) * (parseInt(jobSheetFormData.quantity) || 0)) * 1.10,
+        machine_id: jobSheetFormData.machine_id || null,
+        machine_name: jobSheetFormData.machine_id
+          ? (pressBrakeMachines.find(m => m.id === jobSheetFormData.machine_id)?.machine_name || null)
+          : null
       };
 
       console.log('Creating job sheet with data:', jobSheetData);
@@ -3081,6 +3120,22 @@ const Quotes = () => {
       due_date: ''
     });
     setMultiItemJobSheetDialogOpen(true);
+    
+    // Press Brake: load machines + warn about previously-run parts
+    const pbLines = (quote.line_items || []).filter(li => (li.processes || []).some(p => isPressBrakeProcess(p.name)));
+    if (pbLines.length > 0) {
+      loadPressBrakeMachines();
+      Promise.all(pbLines.map(async (li) => ({
+        part: li.part_description,
+        entries: await fetchPartHistoryFor(li.drawing_number, li.part_description, quote.customer_id)
+      }))).then(groups => {
+        const withHist = groups.filter(g => g.entries.length > 0);
+        if (withHist.length > 0) {
+          setPartHistory(withHist);
+          setPartHistoryOpen(true);
+        }
+      });
+    }
   };
   
   const handleToggleLineItemSelection = (index) => {
@@ -3115,6 +3170,8 @@ const Quotes = () => {
         if (lineItem.processes && lineItem.processes.length > 0) {
           for (const process of lineItem.processes) {
             try {
+              const isPB = isPressBrakeProcess(process.name);
+              const mId = isPB ? (override.machine_id || null) : null;
               const jobSheetData = {
                 quote_id: selectedQuote.id,
                 line_item_id: lineItem.id,
@@ -3126,7 +3183,9 @@ const Quotes = () => {
                 unit_price_ex_gst: parseFloat(unitExOverride.toFixed(4)),
                 total_value: parseFloat(totalValue.toFixed(2)),
                 purchase_order_number: multiItemJobSheetData.purchase_order_number || null,
-                due_date: multiItemJobSheetData.due_date ? new Date(multiItemJobSheetData.due_date).toISOString() : null
+                due_date: multiItemJobSheetData.due_date ? new Date(multiItemJobSheetData.due_date).toISOString() : null,
+                machine_id: mId,
+                machine_name: mId ? (pressBrakeMachines.find(m => m.id === mId)?.machine_name || null) : null
               };
               
               await api.post('/job-sheets', jobSheetData);
@@ -6438,6 +6497,35 @@ const Quotes = () => {
               />
             </div>
 
+            {/* Press Brake Machine Selection */}
+            {isPressBrakeProcess(selectedProcess?.name) && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4" data-testid="js-machine-section">
+                <Label htmlFor="js_machine" className="text-base text-purple-900 font-semibold">
+                  🏭 Press Brake Machine
+                </Label>
+                <select
+                  id="js_machine"
+                  data-testid="js-machine-select"
+                  className="flex h-10 w-full rounded-md border border-purple-300 bg-white px-3 py-2 text-sm mt-1"
+                  value={jobSheetFormData.machine_id || ''}
+                  onChange={(e) => setJobSheetFormData(prev => ({ ...prev, machine_id: e.target.value }))}
+                >
+                  <option value="">— Select machine —</option>
+                  {pressBrakeMachines.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {pressBrakeMachines.length === 0 && (
+                  <p className="text-xs text-purple-600 mt-1">
+                    No active Press Brake machines found — add them under Machines (type &quot;Press Brake&quot;).
+                  </p>
+                )}
+                <p className="text-xs text-purple-600 mt-1">The machine name will print bold on the job sheet.</p>
+              </div>
+            )}
+
             {/* Q.A. Inspection Interval - Only show if quote has inspection items */}
             {selectedQuote?.qa_inspection_items?.length > 0 && (
               <div className="bg-teal-50 border border-teal-200 rounded p-4">
@@ -6620,6 +6708,27 @@ const Quotes = () => {
                               {formatCurrency(jobTotalInc)}
                             </div>
                           </div>
+                          {item.processes?.some(p => isPressBrakeProcess(p.name)) && (
+                            <div className="col-span-3">
+                              <Label className="text-xs text-purple-900">🏭 Press Brake Machine</Label>
+                              <select
+                                data-testid={`multi-js-machine-${index}`}
+                                className="flex h-8 w-full rounded-md border border-purple-300 bg-white px-2 text-sm"
+                                value={override.machine_id || ''}
+                                onChange={(e) => setLineJobOverrides(prev => ({
+                                  ...prev,
+                                  [index]: { ...(prev[index] || {}), machine_id: e.target.value }
+                                }))}
+                              >
+                                <option value="">— Select machine —</option>
+                                {pressBrakeMachines.map(m => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -6652,6 +6761,50 @@ const Quotes = () => {
               <FileText className="h-4 w-4 mr-2" />
               Generate Job Sheets
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Press Brake Part History Popup */}
+      <Dialog open={partHistoryOpen} onOpenChange={setPartHistoryOpen}>
+        <DialogContent className="max-w-2xl" data-testid="part-history-dialog">
+          <DialogHeader>
+            <DialogTitle>⚠️ This Part Has Been Run Before</DialogTitle>
+            <DialogDescription>
+              Previous Press Brake job(s) found for this part — check which machine and tooling were used last time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[50vh] overflow-y-auto">
+            {partHistory.map((grp, gi) => (
+              <div key={gi}>
+                <div className="font-semibold text-sm text-slate-800 mb-1">{grp.part}</div>
+                <table className="w-full text-xs border border-slate-300">
+                  <thead className="bg-slate-100">
+                    <tr>
+                      <th className="text-left px-2 py-1 border">Job #</th>
+                      <th className="text-left px-2 py-1 border">Machine Used</th>
+                      <th className="text-left px-2 py-1 border">Top Punch</th>
+                      <th className="text-left px-2 py-1 border">V Die</th>
+                      <th className="text-left px-2 py-1 border">Completed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grp.entries.map((e, ei) => (
+                      <tr key={ei} className="border-t">
+                        <td className="px-2 py-1 border font-semibold">{e.job_sheet_number}</td>
+                        <td className="px-2 py-1 border font-bold text-purple-800">{e.machine_name || '—'}</td>
+                        <td className="px-2 py-1 border">{e.top_punch_used || '—'}</td>
+                        <td className="px-2 py-1 border">{e.v_die_used || '—'}</td>
+                        <td className="px-2 py-1 border">{e.completed_at ? new Date(e.completed_at).toLocaleDateString('en-AU') : e.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setPartHistoryOpen(false)} data-testid="part-history-ok-btn">Got it</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

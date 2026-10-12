@@ -41,7 +41,9 @@ const JobSheets = () => {
     reject_reason: '',
     start_time: '',
     end_time: '',
-    production_notes: ''
+    production_notes: '',
+    top_punch_used: '',
+    v_die_used: ''
   });
   const [timeFromShopFloor, setTimeFromShopFloor] = useState(false); // Track if time was auto-populated
   
@@ -222,7 +224,9 @@ const JobSheets = () => {
       reject_reason: '',
       start_time: '',
       end_time: new Date().toISOString().slice(0, 16), // Current time in local format
-      production_notes: ''
+      production_notes: '',
+      top_punch_used: '',
+      v_die_used: ''
     };
     
     // Try to fetch time entries from Shop Floor Entry to auto-populate
@@ -350,7 +354,9 @@ const JobSheets = () => {
         reject_reason: completionData.reject_reason || null,
         start_time: completionData.start_time ? new Date(completionData.start_time).toISOString() : null,
         end_time: new Date(completionData.end_time).toISOString(),
-        production_notes: completionData.production_notes || null
+        production_notes: completionData.production_notes || null,
+        top_punch_used: completionData.top_punch_used || null,
+        v_die_used: completionData.v_die_used || null
       };
 
       const response = await api.post(`/job-sheets/${selectedJobSheet.id}/complete`, apiData);
@@ -809,6 +815,11 @@ const JobSheets = () => {
               <div class="label-med">Process</div>
               <div class="value-med">${jobSheet.process_name}</div>
             </div>
+            ${jobSheet.machine_name ? `
+            <div class="key-info-item" style="background: #f3e8ff; border-color: #9333ea;">
+              <div class="label-med" style="color: #6b21a8;">Machine</div>
+              <div class="value-med" style="color: #6b21a8; font-weight: 900;">${jobSheet.machine_name}</div>
+            </div>` : ''}
             <div class="key-info-item" style="background: #fef3c7; border-color: #f59e0b;">
               <div class="label-med" style="color: #92400e;">Due Date</div>
               <div class="value-med" style="color: #92400e;">${formatDueDateForPrint(jobSheet.due_date)}</div>
@@ -1401,6 +1412,15 @@ const JobSheets = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div><strong>Quote:</strong> {selectedJobSheet.quote_number}</div>
                 <div><strong>Process:</strong> {selectedJobSheet.process_name}</div>
+                {selectedJobSheet.machine_name && (
+                  <div><strong>Machine:</strong> <span className="font-bold text-purple-800">{selectedJobSheet.machine_name}</span></div>
+                )}
+                {selectedJobSheet.top_punch_used && (
+                  <div><strong>Top Punch Used:</strong> {selectedJobSheet.top_punch_used}</div>
+                )}
+                {selectedJobSheet.v_die_used && (
+                  <div><strong>V Die Used:</strong> {selectedJobSheet.v_die_used}</div>
+                )}
                 <div><strong>Customer:</strong> {selectedJobSheet.customer_name}</div>
                 <div><strong>Part:</strong> {selectedJobSheet.part_description}</div>
                 <div><strong>Quantity:</strong> {selectedJobSheet.quantity}</div>
@@ -1590,6 +1610,34 @@ const JobSheets = () => {
                 rows={3}
               />
             </div>
+            
+            {/* Press Brake tooling used */}
+            {/press|brake|fold/i.test(selectedJobSheet?.process_name || '') && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3" data-testid="pb-tooling-section">
+                <div className="font-semibold text-sm text-purple-900 mb-2">🔧 Press Brake Tooling Used</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Top Punch Used</Label>
+                    <Input
+                      value={completionData.top_punch_used}
+                      onChange={(e) => setCompletionData({...completionData, top_punch_used: e.target.value})}
+                      placeholder="e.g. 11.049 (R8)"
+                      data-testid="top-punch-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>V Die Used</Label>
+                    <Input
+                      value={completionData.v_die_used}
+                      onChange={(e) => setCompletionData({...completionData, v_die_used: e.target.value})}
+                      placeholder="e.g. V40"
+                      data-testid="v-die-input"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-purple-600 mt-1">Recorded so the next run of this part knows what tooling was used.</p>
+              </div>
+            )}
             
             {/* Validation Summary */}
             <div className="bg-blue-50 p-3 rounded text-sm">

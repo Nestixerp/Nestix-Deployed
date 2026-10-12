@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+from typing import List, Optional
 from models import JobSheet, JobSheetCreate, JobSheetUpdate, JobSheetComplete
 from auth import get_current_user
 import os
@@ -169,6 +169,8 @@ async def create_job_sheet(
         tonnage=process.get('tonnage'),
         bend_angles=process.get('bend_angles'),
         tooling_required=process.get('tooling_required'),
+        machine_id=job_sheet_data.machine_id,
+        machine_name=job_sheet_data.machine_name,
         status="Pending",
         created_by=current_user['username'],
         # Quality Assurance Inspection
@@ -189,6 +191,34 @@ async def get_all_job_sheets(current_user: dict = Depends(get_current_user)):
     """Get all job sheets (enriched with material spec from quote if missing)"""
     job_sheets = await db.job_sheets.find().sort("job_sheet_number", -1).to_list(length=None)
     return [await _enrich_with_quote_material(js) for js in job_sheets]
+
+@router.get("/job-sheets/part-history/lookup")
+async def get_part_history(
+    drawing_number: Optional[str] = None,
+    part_description: Optional[str] = None,
+    customer_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Previous Press Brake job sheets for a part — drawing number first, fall back to part description."""
+    pb = {"process_name": {"$regex": "press|brake|fold", "$options": "i"}}
+    results = []
+    if drawing_number:
+        results = await db.job_sheets.find({**pb, "drawing_number": drawing_number}, {"_id": 0}) \
+            .sort("created_at", -1).to_list(10)
+    if not results and part_description:
+        q = {**pb, "part_description": part_description}
+        if customer_id:
+            q["customer_id"] = customer_id
+        results = await db.job_sheets.find(q, {"_id": 0}).sort("created_at", -1).to_list(10)
+    return [{
+        "job_sheet_number": r.get("job_sheet_number"),
+        "machine_name": r.get("machine_name"),
+        "top_punch_used": r.get("top_punch_used"),
+        "v_die_used": r.get("v_die_used"),
+        "status": r.get("status"),
+        "completed_at": r.get("completed_at"),
+        "part_description": r.get("part_description"),
+    } for r in results[:5]]
 
 @router.get("/job-sheets/{job_sheet_id}", response_model=JobSheet)
 async def get_job_sheet(
@@ -352,6 +382,8 @@ async def complete_job_sheet(
         "completed_at": completion_data.end_time.isoformat(),
         "actual_time_taken": actual_time_taken,
         "production_notes": completion_data.production_notes,
+        "top_punch_used": completion_data.top_punch_used,
+        "v_die_used": completion_data.v_die_used,
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     
