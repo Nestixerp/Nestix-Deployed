@@ -77,8 +77,17 @@ const Quotes = () => {
   const isPressBrakeProcess = (name) => /press|brake|fold/i.test(name || '');
   const loadPressBrakeMachines = async () => {
     try {
-      const res = await api.get('/machines');
-      setPressBrakeMachines((res.data || []).filter(m => /press/i.test(m.machine_type || '') && m.status === 'Active'));
+      const [mr, wr] = await Promise.all([
+        api.get('/machines'),
+        api.get('/job-sheets/machine-workload/summary').catch(() => ({ data: { machines: [] } }))
+      ]);
+      const counts = {};
+      (wr.data.machines || []).forEach(w => { counts[w.machine_id] = w.open_jobs; });
+      setPressBrakeMachines(
+        (mr.data || [])
+          .filter(m => /press/i.test(m.machine_type || '') && m.status === 'Active')
+          .map(m => ({ ...m, open_jobs: counts[m.id] || 0 }))
+      );
     } catch { setPressBrakeMachines([]); }
   };
   const fetchPartHistoryFor = async (drawingNumber, partDescription, customerId) => {
@@ -6513,7 +6522,7 @@ const Quotes = () => {
                   <option value="">— Select machine —</option>
                   {pressBrakeMachines.map(m => (
                     <option key={m.id} value={m.id}>
-                      {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''}
+                      {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''} — {m.open_jobs || 0} open job{(m.open_jobs || 0) === 1 ? '' : 's'}
                     </option>
                   ))}
                 </select>
@@ -6522,7 +6531,7 @@ const Quotes = () => {
                     No active Press Brake machines found — add them under Machines (type &quot;Press Brake&quot;).
                   </p>
                 )}
-                <p className="text-xs text-purple-600 mt-1">The machine name will print bold on the job sheet.</p>
+                <p className="text-xs text-purple-600 mt-1">The machine name will print bold on the job sheet. Open job counts help you balance workload.</p>
               </div>
             )}
 
@@ -6723,7 +6732,7 @@ const Quotes = () => {
                                 <option value="">— Select machine —</option>
                                 {pressBrakeMachines.map(m => (
                                   <option key={m.id} value={m.id}>
-                                    {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''}
+                                    {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''} — {m.open_jobs || 0} open job{(m.open_jobs || 0) === 1 ? '' : 's'}
                                   </option>
                                 ))}
                               </select>

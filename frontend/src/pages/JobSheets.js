@@ -1698,7 +1698,7 @@ const JobSheets = () => {
             {/press|brake|fold/i.test(selectedJobSheet?.process_name || '') && (
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-3" data-testid="pb-tooling-section">
                 <div className="font-semibold text-sm text-purple-900 mb-2">
-                  🔧 Press Brake Tooling Used{jobToolingSystem ? ` — ${jobToolingSystem === 'Wila' ? 'Wila Library' : 'Euro Type Tooling'}` : ''}
+                  🔧 Press Brake Tooling Used{jobToolingSystem ? ` — ${jobToolingSystem === 'Wila' ? 'Willa Tool Library' : 'Euro Style Tooling Library'}` : ''}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <ToolingPicker

@@ -7,8 +7,8 @@ import { Wrench, Plus, Trash2 } from 'lucide-react';
 import api from '../services/api';
 
 const SYSTEMS = [
-  { key: 'Wila', label: 'Wila Library' },
-  { key: 'Euro', label: 'Euro Type Tooling' },
+  { key: 'Wila', label: 'Willa Tool Library' },
+  { key: 'Euro', label: 'Euro Style Tooling Library' },
 ];
 
 const ToolingColumn = ({ title, type, system, items, onAdd, onToggle, onDelete }) => {

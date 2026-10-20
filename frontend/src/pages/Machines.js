@@ -10,6 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Cpu, Plus, Edit, Trash2, Search, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 import { ToolingLibrary } from '../components/ToolingLibrary';
+import { MachineWorkload } from '../components/MachineWorkload';
 
 const Machines = () => {
   const [machines, setMachines] = useState([]);
@@ -240,6 +241,9 @@ const Machines = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Press Brake Workload */}
+      <MachineWorkload />
 
       {/* Press Brake Tooling Library */}
       <ToolingLibrary />

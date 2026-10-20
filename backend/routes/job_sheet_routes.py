@@ -216,6 +216,61 @@ async def get_all_job_sheets(current_user: dict = Depends(get_current_user)):
     job_sheets = await db.job_sheets.find().sort("job_sheet_number", -1).to_list(length=None)
     return [await _enrich_with_quote_material(js) for js in job_sheets]
 
+@router.get("/job-sheets/machine-workload/summary")
+async def get_machine_workload(current_user: dict = Depends(get_current_user)):
+    """Open Press Brake jobs per machine, for balancing work when assigning."""
+    machines = await db.machines.find(
+        {"machine_type": {"$regex": "press", "$options": "i"}}, {"_id": 0}).to_list(100)
+    open_js = await db.job_sheets.find({
+        "status": {"$nin": ["Completed", "Cancelled"]},
+        "process_name": {"$regex": "press|brake|fold", "$options": "i"}
+    }, {"_id": 0}).to_list(1000)
+
+    def est_minutes(js):
+        qty = js.get("quantity") or 0
+        return (js.get("setup_time") or 0) + \
+            ((js.get("number_of_bends") or 0) * (js.get("time_per_bend") or 0) * qty) / 60 + \
+            ((js.get("packing_time") or 0) * qty) / 60
+
+    def job_row(j):
+        return {
+            "job_sheet_number": j.get("job_sheet_number"),
+            "part_description": j.get("part_description"),
+            "customer_name": j.get("customer_name"),
+            "quantity": j.get("quantity"),
+            "due_date": j.get("due_date"),
+            "status": j.get("status"),
+            "est_minutes": round(est_minutes(j)),
+        }
+
+    result = []
+    for m in machines:
+        jobs = [j for j in open_js if j.get("machine_id") == m["id"] or
+                (j.get("machine_name") and j.get("machine_name") == m["machine_name"])]
+        jobs.sort(key=lambda x: x.get("due_date") or "9999")
+        result.append({
+            "machine_id": m["id"],
+            "machine_name": m["machine_name"],
+            "machine_status": m.get("status"),
+            "tooling_system": m.get("tooling_system"),
+            "open_jobs": len(jobs),
+            "total_parts": sum(j.get("quantity") or 0 for j in jobs),
+            "est_minutes": round(sum(est_minutes(j) for j in jobs)),
+            "jobs": [job_row(j) for j in jobs],
+        })
+    unassigned = sorted(
+        [j for j in open_js if not j.get("machine_id") and not j.get("machine_name")],
+        key=lambda x: x.get("due_date") or "9999")
+    return {
+        "machines": result,
+        "unassigned": {
+            "open_jobs": len(unassigned),
+            "total_parts": sum(j.get("quantity") or 0 for j in unassigned),
+            "est_minutes": round(sum(est_minutes(j) for j in unassigned)),
+            "jobs": [job_row(j) for j in unassigned],
+        },
+    }
+
 @router.get("/job-sheets/part-history/lookup")
 async def get_part_history(
     drawing_number: Optional[str] = None,
