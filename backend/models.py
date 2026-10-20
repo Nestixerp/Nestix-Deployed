@@ -1621,6 +1621,7 @@ class Machine(BaseModel):
     machine_name: str
     machine_number: Optional[str] = None
     machine_type: Optional[str] = None  # e.g., "Press Brake", "Laser Cutter", "CNC"
+    tooling_system: Optional[str] = None  # e.g., "Wila", "Euro" (press brake tooling family)
     status: str = "Active"  # Active, Inactive, Maintenance
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -1630,6 +1631,7 @@ class MachineCreate(BaseModel):
     machine_name: str
     machine_number: Optional[str] = None
     machine_type: Optional[str] = None
+    tooling_system: Optional[str] = None
     status: str = "Active"
     notes: Optional[str] = None
 
@@ -1637,6 +1639,7 @@ class MachineUpdate(BaseModel):
     machine_name: Optional[str] = None
     machine_number: Optional[str] = None
     machine_type: Optional[str] = None
+    tooling_system: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
 

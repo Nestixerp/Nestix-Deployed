@@ -23,6 +23,7 @@ const Machines = () => {
     machine_name: '',
     machine_number: '',
     machine_type: '',
+    tooling_system: '',
     status: 'Active',
     notes: ''
   });
@@ -100,6 +101,7 @@ const Machines = () => {
       machine_name: machine.machine_name || '',
       machine_number: machine.machine_number || '',
       machine_type: machine.machine_type || '',
+      tooling_system: machine.tooling_system || '',
       status: machine.status || 'Active',
       notes: machine.notes || ''
     });
@@ -116,6 +118,7 @@ const Machines = () => {
       machine_name: '',
       machine_number: '',
       machine_type: '',
+      tooling_system: '',
       status: 'Active',
       notes: ''
     });
@@ -282,6 +285,21 @@ const Machines = () => {
             </div>
             
             <div className="space-y-2">
+              <Label htmlFor="tooling-system">Tooling System (Press Brakes)</Label>
+              <select
+                id="tooling-system"
+                data-testid="machine-tooling-system-select"
+                className="w-full p-2 border rounded-md"
+                value={formData.tooling_system}
+                onChange={(e) => setFormData({ ...formData, tooling_system: e.target.value })}
+              >
+                <option value="">None</option>
+                <option value="Wila">Wila</option>
+                <option value="Euro">Euro</option>
+              </select>
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
               <select
                 id="status"
@@ -350,6 +368,21 @@ const Machines = () => {
                 value={formData.machine_type}
                 onChange={(e) => setFormData({ ...formData, machine_type: e.target.value })}
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-tooling-system">Tooling System (Press Brakes)</Label>
+              <select
+                id="edit-tooling-system"
+                data-testid="edit-machine-tooling-system-select"
+                className="w-full p-2 border rounded-md"
+                value={formData.tooling_system}
+                onChange={(e) => setFormData({ ...formData, tooling_system: e.target.value })}
+              >
+                <option value="">None</option>
+                <option value="Wila">Wila</option>
+                <option value="Euro">Euro</option>
+              </select>
             </div>
             
             <div className="space-y-2">

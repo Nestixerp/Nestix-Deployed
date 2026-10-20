@@ -78,6 +78,7 @@ const JobSheets = () => {
     v_die_used: ''
   });
   const [toolingOptions, setToolingOptions] = useState({ top_punch: [], v_die: [] });
+  const [jobToolingSystem, setJobToolingSystem] = useState(null);
   const [timeFromShopFloor, setTimeFromShopFloor] = useState(false); // Track if time was auto-populated
   
   // Packing Slip States
@@ -248,8 +249,13 @@ const JobSheets = () => {
 
   const handleOpenCompleteDialog = async (jobSheet) => {
     if (/press|brake|fold/i.test(jobSheet.process_name || '')) {
-      api.get('/tooling').then(r => {
-        const items = (r.data || []).filter(t => t.status === 'Active');
+      Promise.all([api.get('/tooling'), api.get('/machines')]).then(([tr, mr]) => {
+        const machinesList = mr.data || [];
+        const machine = machinesList.find(m => m.id === jobSheet.machine_id) ||
+                        machinesList.find(m => m.machine_name === jobSheet.machine_name);
+        const system = machine?.tooling_system || null;
+        setJobToolingSystem(system);
+        const items = (tr.data || []).filter(t => t.status === 'Active' && (!system || t.tooling_system === system));
         setToolingOptions({
           top_punch: items.filter(t => t.tooling_type === 'top_punch'),
           v_die: items.filter(t => t.tooling_type === 'v_die')
@@ -404,7 +410,7 @@ const JobSheets = () => {
       // Grow the tooling library with any newly typed tooling
       const saveNewTooling = (type, val, list) => {
         if (val && !list.some(o => o.name.toLowerCase() === val.toLowerCase())) {
-          api.post('/tooling', { tooling_type: type, name: val }).catch(() => {});
+          api.post('/tooling', { tooling_type: type, tooling_system: jobToolingSystem, name: val }).catch(() => {});
         }
       };
       saveNewTooling('top_punch', apiData.top_punch_used, toolingOptions.top_punch);
@@ -1691,7 +1697,9 @@ const JobSheets = () => {
             {/* Press Brake tooling used */}
             {/press|brake|fold/i.test(selectedJobSheet?.process_name || '') && (
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-3" data-testid="pb-tooling-section">
-                <div className="font-semibold text-sm text-purple-900 mb-2">🔧 Press Brake Tooling Used</div>
+                <div className="font-semibold text-sm text-purple-900 mb-2">
+                  🔧 Press Brake Tooling Used{jobToolingSystem ? ` — ${jobToolingSystem === 'Wila' ? 'Wila Library' : 'Euro Type Tooling'}` : ''}
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <ToolingPicker
                     label="Top Punch Used"

@@ -19,6 +19,7 @@ TOOLING_TYPES = ("top_punch", "v_die")
 class ToolingItem(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tooling_type: str  # top_punch | v_die
+    tooling_system: Optional[str] = None  # Wila | Euro | None (unassigned)
     name: str
     description: Optional[str] = None
     status: str = "Active"
@@ -27,6 +28,7 @@ class ToolingItem(BaseModel):
 
 class ToolingCreate(BaseModel):
     tooling_type: str
+    tooling_system: Optional[str] = None
     name: str
     description: Optional[str] = None
 
@@ -35,6 +37,7 @@ class ToolingUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
+    tooling_system: Optional[str] = None
 
 
 async def _seed_from_history():
@@ -49,9 +52,14 @@ async def _seed_from_history():
 
 
 @router.get("", response_model=List[ToolingItem])
-async def get_tooling(tooling_type: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def get_tooling(tooling_type: Optional[str] = None, tooling_system: Optional[str] = None,
+                      current_user: dict = Depends(get_current_user)):
     await _seed_from_history()
-    query = {"tooling_type": tooling_type} if tooling_type else {}
+    query = {}
+    if tooling_type:
+        query["tooling_type"] = tooling_type
+    if tooling_system:
+        query["tooling_system"] = tooling_system
     items = await db[COLL].find(query, {"_id": 0}).sort("name", 1).to_list(500)
     return [ToolingItem(**i) for i in items]
 
@@ -65,11 +73,13 @@ async def create_tooling(payload: ToolingCreate, current_user: dict = Depends(ge
         raise HTTPException(status_code=400, detail="Name is required")
     existing = await db[COLL].find_one({
         "tooling_type": payload.tooling_type,
+        "tooling_system": payload.tooling_system,
         "name": {"$regex": f"^{__import__('re').escape(name)}$", "$options": "i"}
     }, {"_id": 0})
     if existing:
         return ToolingItem(**existing)
-    item = ToolingItem(tooling_type=payload.tooling_type, name=name, description=payload.description)
+    item = ToolingItem(tooling_type=payload.tooling_type, tooling_system=payload.tooling_system,
+                       name=name, description=payload.description)
     await db[COLL].insert_one(item.model_dump())
     return item
 
