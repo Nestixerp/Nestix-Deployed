@@ -1060,6 +1060,13 @@ class JobSheet(BaseModel):
     top_punch_used: Optional[str] = None  # Press Brake: top punch used (recorded on completion)
     v_die_used: Optional[str] = None  # Press Brake: V die used (recorded on completion)
     
+    # Carried forward from the part's previous Press Brake run
+    last_run_job_number: Optional[str] = None
+    last_run_machine: Optional[str] = None
+    last_used_top_punch: Optional[str] = None
+    last_used_v_die: Optional[str] = None
+    previous_production_notes: Optional[str] = None
+    
     # Quality & Notes
     quality_check_passed: Optional[bool] = None
     quality_notes: Optional[str] = None

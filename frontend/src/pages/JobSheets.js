@@ -859,6 +859,13 @@ const JobSheets = () => {
           <div class="section">
             <h2>🔧 Press Brake Specifications</h2>
             
+            ${(jobSheet.last_used_top_punch || jobSheet.last_used_v_die) ? `
+            <div style="background: #f3e8ff; border: 2px solid #9333ea; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px;">
+              <div style="font-weight: 900; color: #6b21a8; font-size: 13px;">🔧 TOOLING — AS USED ON LAST RUN (${jobSheet.last_run_job_number || 'previous job'}${jobSheet.last_run_machine ? ` — ${jobSheet.last_run_machine}` : ''})</div>
+              <div style="font-weight: 800; color: #111; font-size: 14px; margin-top: 2px;">Top Punch: ${jobSheet.last_used_top_punch || '—'} &nbsp;|&nbsp; V Die: ${jobSheet.last_used_v_die || '—'}</div>
+              <div style="font-size: 10px; color: #6b21a8;">Supersedes quote tooling if different.</div>
+            </div>` : ''}
+            
             ${jobSheet.processes && jobSheet.processes.length > 0 ? `
               ${jobSheet.processes.map((process, index) => `
                 <div style="margin-bottom: 20px; ${index > 0 ? 'border-top: 1px solid #ddd; padding-top: 15px;' : ''}">
@@ -873,7 +880,7 @@ const JobSheets = () => {
                       <td><span class="label">No. of Bends:</span> ${process.number_of_bends || 'N/A'}</td>
                     </tr>
                     <tr>
-                      <td colspan="2"><span class="label">🔧 Tooling Required:</span> <strong>${process.tooling_required || 'Not specified'}</strong></td>
+                      <td colspan="2"><span class="label">🔧 Tooling Required:</span> <strong>${(jobSheet.last_used_top_punch || jobSheet.last_used_v_die) ? `${[jobSheet.last_used_top_punch ? `Top Punch: ${jobSheet.last_used_top_punch}` : '', jobSheet.last_used_v_die ? `V Die: ${jobSheet.last_used_v_die}` : ''].filter(Boolean).join(' | ')} (as used on ${jobSheet.last_run_job_number})` : (process.tooling_required || 'Not specified')}</strong></td>
                     </tr>
                     <tr>
                       <td><span class="label">Bend Angles:</span> ${process.bend_angles || '___________________________'}</td>
@@ -893,7 +900,7 @@ const JobSheets = () => {
                   <td><span class="label">Material Type:</span> ${jobSheet.material}</td>
                 </tr>
                 <tr>
-                  <td><span class="label">🔧 Tooling Required:</span> <strong>${jobSheet.tooling_required || 'Not specified'}</strong></td>
+                  <td><span class="label">🔧 Tooling Required:</span> <strong>${(jobSheet.last_used_top_punch || jobSheet.last_used_v_die) ? `${[jobSheet.last_used_top_punch ? `Top Punch: ${jobSheet.last_used_top_punch}` : '', jobSheet.last_used_v_die ? `V Die: ${jobSheet.last_used_v_die}` : ''].filter(Boolean).join(' | ')} (as used on ${jobSheet.last_run_job_number})` : (jobSheet.tooling_required || 'Not specified')}</strong></td>
                   <td><span class="label">No. of Bends:</span> ${numberOfBends}</td>
                 </tr>
                 <tr>
@@ -903,6 +910,12 @@ const JobSheets = () => {
               </table>
             `}
           </div>
+
+          ${jobSheet.previous_production_notes ? `
+          <div class="section">
+            <h2>📝 Notes From Previous Runs</h2>
+            <div style="border: 2px solid #f59e0b; background: #fffbeb; border-radius: 6px; padding: 8px 12px; white-space: pre-wrap; font-size: 12px; font-weight: 600;">${jobSheet.previous_production_notes}</div>
+          </div>` : ''}
 
           <div class="section">
             <h2>⏱️ Time Tracking</h2>
@@ -1420,6 +1433,19 @@ const JobSheets = () => {
                 )}
                 {selectedJobSheet.v_die_used && (
                   <div><strong>V Die Used:</strong> {selectedJobSheet.v_die_used}</div>
+                )}
+                {(selectedJobSheet.last_used_top_punch || selectedJobSheet.last_used_v_die) && (
+                  <div data-testid="last-run-tooling">
+                    <strong>Last Run Tooling ({selectedJobSheet.last_run_job_number}):</strong>{' '}
+                    Top Punch {selectedJobSheet.last_used_top_punch || '—'}, V Die {selectedJobSheet.last_used_v_die || '—'}
+                    {selectedJobSheet.last_run_machine ? ` — on ${selectedJobSheet.last_run_machine}` : ''}
+                  </div>
+                )}
+                {selectedJobSheet.previous_production_notes && (
+                  <div data-testid="previous-run-notes">
+                    <strong>Previous Run Notes:</strong>{' '}
+                    <span className="whitespace-pre-wrap">{selectedJobSheet.previous_production_notes}</span>
+                  </div>
                 )}
                 <div><strong>Customer:</strong> {selectedJobSheet.customer_name}</div>
                 <div><strong>Part:</strong> {selectedJobSheet.part_description}</div>

@@ -3,6 +3,7 @@ from typing import List, Optional
 from models import JobSheet, JobSheetCreate, JobSheetUpdate, JobSheetComplete
 from auth import get_current_user
 import os
+import re
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 
@@ -177,6 +178,29 @@ async def create_job_sheet(
         inspection_interval=job_sheet_data.inspection_interval,
         qa_inspection_items=quote.get('qa_inspection_items', [])  # Copy from quote
     )
+    
+    # Press Brake repeat part: carry forward last-used tooling and previous production notes
+    if re.search(r'press|brake|fold', process.get('name') or '', re.I):
+        pb = {"process_name": {"$regex": "press|brake|fold", "$options": "i"}, "status": "Completed"}
+        hist = []
+        if quote.get('drawing_number'):
+            hist = await db.job_sheets.find({**pb, "drawing_number": quote['drawing_number']}, {"_id": 0}) \
+                .sort("created_at", -1).to_list(5)
+        if not hist and part_description:
+            hq = {**pb, "part_description": part_description}
+            if quote.get('customer_id'):
+                hq["customer_id"] = quote['customer_id']
+            hist = await db.job_sheets.find(hq, {"_id": 0}).sort("created_at", -1).to_list(5)
+        last_tooling = next((h for h in hist if h.get("top_punch_used") or h.get("v_die_used")), None)
+        if last_tooling:
+            job_sheet.last_run_job_number = last_tooling.get("job_sheet_number")
+            job_sheet.last_run_machine = last_tooling.get("machine_name")
+            job_sheet.last_used_top_punch = last_tooling.get("top_punch_used")
+            job_sheet.last_used_v_die = last_tooling.get("v_die_used")
+        notes = [f"[{h.get('job_sheet_number')}] {h.get('production_notes').strip()}"
+                 for h in hist[:3] if (h.get('production_notes') or '').strip()]
+        if notes:
+            job_sheet.previous_production_notes = "\n".join(notes)
     
     # Prepare for MongoDB
     job_sheet_dict = job_sheet.dict()
