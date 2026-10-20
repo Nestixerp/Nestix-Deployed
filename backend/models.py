@@ -807,6 +807,7 @@ class QuoteCreate(BaseModel):
     customer_id: Optional[str] = None
     customer_name: str
     contact_person: Optional[str] = None
+    is_draft: bool = False  # lenient validation for auto-saved unfinished quotes
     
     # Multi-item quote support
     is_multi_item: bool = False

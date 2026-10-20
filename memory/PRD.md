@@ -1100,3 +1100,6 @@ Note: JS-0015 enriched with tooling from its own notes (Shanghai Pro Gooseneck B
 
 ### Workload On Dashboard (Jun 2026) — DONE ✅ (UI screenshot verified)
 Reused <MachineWorkload /> on the main Dashboard (between stat tiles and Quotes Today row). Full functionality incl. assign-from-workload also works there. File: Dashboard.js. Needs redeploy.
+
+### Quote Draft Auto-Save on Leave (Jun 2026) — DONE ✅ (verified: UI runs created drafts #131/132/136 correctly, empty closes created nothing; test drafts deleted)
+Unfinished NEW quotes are auto-saved server-side as status "Draft" with a reserved quote number when the create dialog is closed (Escape/X) or when the user jumps into another quote (handleEditQuote). Alert tells the user the Draft quote number; resume via Edit from the list. Backend: QuoteCreate.is_draft=True relaxes single-item required-field validation (placeholders: part '(Draft — incomplete)', TBD materials). Frontend: saveDraftQuote/saveDraftOnLeave + hasDraftContent (customer, part description, or line items present) in Quotes.js; localStorage quote_draft cleared after server save. Empty forms never create drafts. Needs redeploy.

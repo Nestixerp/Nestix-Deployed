@@ -33,6 +33,49 @@ const Quotes = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const savingDraftRef = React.useRef(false);
+
+  // --- Server-side draft save: unfinished quotes keep their quote number ---
+  const hasDraftContent = () =>
+    !!(formData.customer_name || formData.part_description || lineItems.length > 0);
+
+  const saveDraftQuote = async () => {
+    if (savingDraftRef.current) return null;
+    savingDraftRef.current = true;
+    try {
+      const payload = {
+        ...formData,
+        customer_name: formData.customer_name || '(Draft — no customer yet)',
+        processes: formData.processes || [],
+        is_multi_item: lineItems.length > 0,
+        line_items: lineItems,
+        quantity_breaks: formData.quantity_breaks || [],
+        qa_inspection_items: formData.qa_inspection_items || [],
+        is_draft: true,
+        created_by: 'admin'
+      };
+      const res = await api.post('/quotes', payload);
+      localStorage.removeItem('quote_draft');
+      fetchQuotes();
+      return res.data;
+    } catch (e) {
+      console.error('Draft save failed:', e);
+      return null;
+    } finally {
+      savingDraftRef.current = false;
+    }
+  };
+
+  const saveDraftOnLeave = async () => {
+    if (!editingQuote && hasDraftContent()) {
+      const d = await saveDraftQuote();
+      if (d) {
+        alert(`Your unfinished quote was saved as Draft Quote #${d.quote_number}.\nOpen it from the quotes list (Edit) to continue where you left off.`);
+      }
+      return d;
+    }
+    return null;
+  };
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [jobSheetDialogOpen, setJobSheetDialogOpen] = useState(false);
@@ -1673,6 +1716,10 @@ const Quotes = () => {
   };
 
   const handleEditQuote = async (quote) => {
+    // If a new quote is in progress, save it as a Draft before jumping into another quote
+    if (createDialogOpen && !editingQuote && hasDraftContent()) {
+      await saveDraftOnLeave();
+    }
     // CRITICAL: Close dialog first and clear all state to prevent contamination
     setCreateDialogOpen(false);
     
@@ -3609,6 +3656,10 @@ const Quotes = () => {
 
       {/* Create Quote Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          // Save unfinished new quote as a server-side Draft (keeps its quote number)
+          saveDraftOnLeave();
+        }
         setCreateDialogOpen(open);
         if (!open) {
           // Clear all state when dialog closes

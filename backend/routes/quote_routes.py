@@ -280,6 +280,7 @@ async def create_quote(
     
     # Check if this is a multi-item quote
     is_multi_item = quote_dict.get('is_multi_item', False)
+    is_draft = quote_dict.pop('is_draft', False)
     
     if is_multi_item:
         # Multi-item quote: line_items contain all costs already calculated by frontend
@@ -315,6 +316,15 @@ async def create_quote(
         # Single-item quote: validate required fields
         required_fields = ['part_description', 'material_type', 'grade', 'finish', 'thickness', 'sheet_width', 'sheet_length']
         missing_fields = [field for field in required_fields if not quote_dict.get(field)]
+        if missing_fields and is_draft:
+            # Auto-saved unfinished quote: fill placeholders so it can be resumed later
+            draft_defaults = {
+                'part_description': '(Draft — incomplete)', 'material_type': '', 'grade': '',
+                'finish': '', 'thickness': '', 'sheet_width': 0.0, 'sheet_length': 0.0
+            }
+            for f in missing_fields:
+                quote_dict[f] = draft_defaults[f] if draft_defaults[f] != '' else 'TBD'
+            missing_fields = []
         if missing_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
