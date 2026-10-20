@@ -1092,3 +1092,8 @@ GET /api/job-sheets/machine-workload/summary — open (non-Completed/Cancelled) 
 2. Completion dialog: added explicit "Tooling Library" dropdown (All/Willa/Euro Style) driving the Top Punch & V Die pick-lists; defaults to the job machine's tooling system. allTooling + toolingFor() in JobSheets.js. "+ Add new…" saves under the selected library.
 3. Labels standardised everywhere: "Willa Tooling Library" / "Euro Style Tooling Library" (internal keys Wila/Euro unchanged).
 Needs redeploy.
+
+### Assign From Workload + Tooling Usage Report (Jun 2026) — DONE ✅ (UI + curl verified)
+1. Assign From Workload: unassigned jobs in the Press Brake Workload card now have an "Assign to…" machine dropdown per row (confirm prompt → PUT /api/job-sheets/{id} with machine_id/machine_name → card refreshes). JobSheetUpdate model extended with machine fields; workload job rows include job id. Verified: JS-0047 assigned to Denner with one click.
+2. Tooling Usage Report: GET /api/tooling/usage-report aggregates completed job sheets' top_punch_used/v_die_used → jobs count, parts, last used, machines. UI card (components/ToolingUsage.js) on Machines page with ranked bars for Top Punches and V Dies.
+Note: JS-0015 enriched with tooling from its own notes (Shanghai Pro Gooseneck Bullnose / V24) — preview data only. Needs redeploy.

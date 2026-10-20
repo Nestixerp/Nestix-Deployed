@@ -84,6 +84,33 @@ async def create_tooling(payload: ToolingCreate, current_user: dict = Depends(ge
     return item
 
 
+@router.get("/usage-report")
+async def tooling_usage_report(current_user: dict = Depends(get_current_user)):
+    """Which punches and dies get used most (from completed job sheets)."""
+    report = {}
+    for field, key in (("top_punch_used", "top_punches"), ("v_die_used", "v_dies")):
+        pipeline = [
+            {"$match": {field: {"$nin": [None, ""]}}},
+            {"$group": {
+                "_id": f"${field}",
+                "jobs": {"$sum": 1},
+                "parts": {"$sum": {"$ifNull": ["$quantity_completed", {"$ifNull": ["$quantity", 0]}]}},
+                "last_used": {"$max": {"$ifNull": ["$completed_at", "$updated_at"]}},
+                "machines": {"$addToSet": "$machine_name"},
+            }},
+            {"$sort": {"jobs": -1}},
+        ]
+        rows = await db.job_sheets.aggregate(pipeline).to_list(200)
+        report[key] = [{
+            "name": r["_id"],
+            "jobs": r["jobs"],
+            "parts": r["parts"],
+            "last_used": str(r["last_used"]) if r.get("last_used") else None,
+            "machines": [m for m in r.get("machines", []) if m],
+        } for r in rows]
+    return report
+
+
 @router.put("/{tooling_id}", response_model=ToolingItem)
 async def update_tooling(tooling_id: str, payload: ToolingUpdate, current_user: dict = Depends(get_current_user)):
     update = {k: v for k, v in payload.model_dump().items() if v is not None}

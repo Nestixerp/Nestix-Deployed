@@ -234,6 +234,7 @@ async def get_machine_workload(current_user: dict = Depends(get_current_user)):
 
     def job_row(j):
         return {
+            "id": j.get("id"),
             "job_sheet_number": j.get("job_sheet_number"),
             "part_description": j.get("part_description"),
             "customer_name": j.get("customer_name"),

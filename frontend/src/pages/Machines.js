@@ -11,6 +11,7 @@ import { Cpu, Plus, Edit, Trash2, Search, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 import { ToolingLibrary } from '../components/ToolingLibrary';
 import { MachineWorkload } from '../components/MachineWorkload';
+import { ToolingUsage } from '../components/ToolingUsage';
 
 const Machines = () => {
   const [machines, setMachines] = useState([]);
@@ -247,6 +248,9 @@ const Machines = () => {
 
       {/* Press Brake Tooling Library */}
       <ToolingLibrary />
+
+      {/* Tooling Usage Report */}
+      <ToolingUsage />
 
       {/* Create Machine Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>

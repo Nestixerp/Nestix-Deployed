@@ -1116,6 +1116,9 @@ class JobSheetUpdate(BaseModel):
     # Quality Assurance Inspection
     inspection_interval: Optional[int] = None
     qa_inspection_items: Optional[List[dict]] = None
+    # Machine assignment (Press Brake)
+    machine_id: Optional[str] = None
+    machine_name: Optional[str] = None
 
 class JobSheetComplete(BaseModel):
     """Model for completing a job sheet from shop floor"""
