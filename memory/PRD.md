@@ -1097,3 +1097,6 @@ Needs redeploy.
 1. Assign From Workload: unassigned jobs in the Press Brake Workload card now have an "Assign to…" machine dropdown per row (confirm prompt → PUT /api/job-sheets/{id} with machine_id/machine_name → card refreshes). JobSheetUpdate model extended with machine fields; workload job rows include job id. Verified: JS-0047 assigned to Denner with one click.
 2. Tooling Usage Report: GET /api/tooling/usage-report aggregates completed job sheets' top_punch_used/v_die_used → jobs count, parts, last used, machines. UI card (components/ToolingUsage.js) on Machines page with ranked bars for Top Punches and V Dies.
 Note: JS-0015 enriched with tooling from its own notes (Shanghai Pro Gooseneck Bullnose / V24) — preview data only. Needs redeploy.
+
+### Workload On Dashboard (Jun 2026) — DONE ✅ (UI screenshot verified)
+Reused <MachineWorkload /> on the main Dashboard (between stat tiles and Quotes Today row). Full functionality incl. assign-from-workload also works there. File: Dashboard.js. Needs redeploy.

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { FileText, Users, Truck, Package, TrendingUp, DollarSign, AlertTriangle, Clock, Calendar, ShoppingCart } from 'lucide-react';
 import api from '../services/api';
+import { MachineWorkload } from '../components/MachineWorkload';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
@@ -167,6 +168,11 @@ const Dashboard = () => {
       </div>
 
       {/* Quotes Stats Row */}
+      {/* Press Brake Workload — spot bottlenecks at a glance */}
+      <div className="mb-6">
+        <MachineWorkload />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         {/* Quotes Today */}
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100">
