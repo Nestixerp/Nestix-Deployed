@@ -7,7 +7,7 @@ import { Wrench, Plus, Trash2 } from 'lucide-react';
 import api from '../services/api';
 
 const SYSTEMS = [
-  { key: 'Wila', label: 'Willa Tool Library' },
+  { key: 'Wila', label: 'Willa Tooling Library' },
   { key: 'Euro', label: 'Euro Style Tooling Library' },
 ];
 

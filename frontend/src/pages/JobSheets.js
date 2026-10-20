@@ -77,8 +77,10 @@ const JobSheets = () => {
     top_punch_used: '',
     v_die_used: ''
   });
-  const [toolingOptions, setToolingOptions] = useState({ top_punch: [], v_die: [] });
-  const [jobToolingSystem, setJobToolingSystem] = useState(null);
+  const [allTooling, setAllTooling] = useState([]);
+  const [jobToolingSystem, setJobToolingSystem] = useState('');
+  const toolingFor = (type) => allTooling.filter(t =>
+    t.status === 'Active' && t.tooling_type === type && (!jobToolingSystem || t.tooling_system === jobToolingSystem));
   const [timeFromShopFloor, setTimeFromShopFloor] = useState(false); // Track if time was auto-populated
   
   // Packing Slip States
@@ -253,13 +255,8 @@ const JobSheets = () => {
         const machinesList = mr.data || [];
         const machine = machinesList.find(m => m.id === jobSheet.machine_id) ||
                         machinesList.find(m => m.machine_name === jobSheet.machine_name);
-        const system = machine?.tooling_system || null;
-        setJobToolingSystem(system);
-        const items = (tr.data || []).filter(t => t.status === 'Active' && (!system || t.tooling_system === system));
-        setToolingOptions({
-          top_punch: items.filter(t => t.tooling_type === 'top_punch'),
-          v_die: items.filter(t => t.tooling_type === 'v_die')
-        });
+        setJobToolingSystem(machine?.tooling_system || '');
+        setAllTooling(tr.data || []);
       }).catch(() => {});
     }
     setSelectedJobSheet(jobSheet);
@@ -410,11 +407,11 @@ const JobSheets = () => {
       // Grow the tooling library with any newly typed tooling
       const saveNewTooling = (type, val, list) => {
         if (val && !list.some(o => o.name.toLowerCase() === val.toLowerCase())) {
-          api.post('/tooling', { tooling_type: type, tooling_system: jobToolingSystem, name: val }).catch(() => {});
+          api.post('/tooling', { tooling_type: type, tooling_system: jobToolingSystem || null, name: val }).catch(() => {});
         }
       };
-      saveNewTooling('top_punch', apiData.top_punch_used, toolingOptions.top_punch);
-      saveNewTooling('v_die', apiData.v_die_used, toolingOptions.v_die);
+      saveNewTooling('top_punch', apiData.top_punch_used, toolingFor('top_punch'));
+      saveNewTooling('v_die', apiData.v_die_used, toolingFor('v_die'));
 
       const response = await api.post(`/job-sheets/${selectedJobSheet.id}/complete`, apiData);
       
@@ -1697,13 +1694,23 @@ const JobSheets = () => {
             {/* Press Brake tooling used */}
             {/press|brake|fold/i.test(selectedJobSheet?.process_name || '') && (
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-3" data-testid="pb-tooling-section">
-                <div className="font-semibold text-sm text-purple-900 mb-2">
-                  🔧 Press Brake Tooling Used{jobToolingSystem ? ` — ${jobToolingSystem === 'Wila' ? 'Willa Tool Library' : 'Euro Style Tooling Library'}` : ''}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-semibold text-sm text-purple-900">🔧 Press Brake Tooling Used</div>
+                  <select
+                    className="h-8 text-xs border border-purple-300 rounded px-2 bg-white"
+                    value={jobToolingSystem}
+                    onChange={(e) => setJobToolingSystem(e.target.value)}
+                    data-testid="tooling-library-select"
+                  >
+                    <option value="">All libraries</option>
+                    <option value="Wila">Willa Tooling Library</option>
+                    <option value="Euro">Euro Style Tooling Library</option>
+                  </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <ToolingPicker
                     label="Top Punch Used"
-                    options={toolingOptions.top_punch}
+                    options={toolingFor('top_punch')}
                     value={completionData.top_punch_used}
                     onChange={(v) => setCompletionData({...completionData, top_punch_used: v})}
                     testid="top-punch"
@@ -1711,14 +1718,14 @@ const JobSheets = () => {
                   />
                   <ToolingPicker
                     label="V Die Used"
-                    options={toolingOptions.v_die}
+                    options={toolingFor('v_die')}
                     value={completionData.v_die_used}
                     onChange={(v) => setCompletionData({...completionData, v_die_used: v})}
                     testid="v-die"
                     placeholder="e.g. V40"
                   />
                 </div>
-                <p className="text-xs text-purple-600 mt-1">Pick from the tooling library, or choose &quot;+ Add new…&quot; to type it — new tooling is saved to the library automatically. Manage the library on the Machines page.</p>
+                <p className="text-xs text-purple-600 mt-1">Choose the tooling library, then pick the punch &amp; die — or &quot;+ Add new…&quot; to type it (saved to that library automatically). Manage libraries on the Machines page.</p>
               </div>
             )}
             

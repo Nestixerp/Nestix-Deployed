@@ -72,6 +72,26 @@ const Quotes = () => {
   
   // Press Brake machine selection + previous-run part history
   const [pressBrakeMachines, setPressBrakeMachines] = useState([]);
+  // Tooling-on-quote: library pickers for estimators
+  const [toolingLib, setToolingLib] = useState([]);
+  const [toolingMachines, setToolingMachines] = useState([]);
+  const [processToolingSel, setProcessToolingSel] = useState({});
+  useEffect(() => {
+    api.get('/tooling').then(r => setToolingLib((r.data || []).filter(t => t.status === 'Active'))).catch(() => {});
+    api.get('/machines').then(r => setToolingMachines((r.data || []).filter(m => /press/i.test(m.machine_type || '')))).catch(() => {});
+  }, []);
+  const toolingSystemLabel = (sys) => {
+    const names = toolingMachines.filter(m => m.tooling_system === sys).map(m => m.machine_name);
+    return names.length ? ` (${names.join(', ')})` : '';
+  };
+  const updateToolingSel = (pid, patch) => {
+    const cur = { ...(processToolingSel[pid] || {}), ...patch };
+    setProcessToolingSel(prev => ({ ...prev, [pid]: cur }));
+    const parts = [];
+    if (cur.punch) parts.push(`Punch: ${cur.punch}`);
+    if (cur.die) parts.push(`Die: ${cur.die}`);
+    if (parts.length) handleProcessChange(pid, 'tooling_required', parts.join('  '));
+  };
   const [partHistory, setPartHistory] = useState([]);
   const [partHistoryOpen, setPartHistoryOpen] = useState(false);
   const isPressBrakeProcess = (name) => /press|brake|fold/i.test(name || '');
@@ -4792,12 +4812,49 @@ const Quotes = () => {
                                 </div>
                                 <div>
                                   <Label>Tooling Required</Label>
+                                  <div className="grid grid-cols-3 gap-1 mb-1">
+                                    <select
+                                      className="h-8 text-xs border rounded px-1 bg-white"
+                                      value={(processToolingSel[process.id] || {}).system || ''}
+                                      onChange={(e) => updateToolingSel(process.id, { system: e.target.value, punch: '', die: '' })}
+                                      data-testid={`quote-tooling-system-${process.id}`}
+                                    >
+                                      <option value="">Library…</option>
+                                      <option value="Wila">Willa Tooling Library{toolingSystemLabel('Wila')}</option>
+                                      <option value="Euro">Euro Style Tooling Library{toolingSystemLabel('Euro')}</option>
+                                    </select>
+                                    <select
+                                      className="h-8 text-xs border rounded px-1 bg-white"
+                                      value={(processToolingSel[process.id] || {}).punch || ''}
+                                      onChange={(e) => updateToolingSel(process.id, { punch: e.target.value })}
+                                      disabled={!(processToolingSel[process.id] || {}).system}
+                                      data-testid={`quote-tooling-punch-${process.id}`}
+                                    >
+                                      <option value="">Top Punch…</option>
+                                      {toolingLib
+                                        .filter(t => t.tooling_type === 'top_punch' && t.tooling_system === (processToolingSel[process.id] || {}).system)
+                                        .map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                                    </select>
+                                    <select
+                                      className="h-8 text-xs border rounded px-1 bg-white"
+                                      value={(processToolingSel[process.id] || {}).die || ''}
+                                      onChange={(e) => updateToolingSel(process.id, { die: e.target.value })}
+                                      disabled={!(processToolingSel[process.id] || {}).system}
+                                      data-testid={`quote-tooling-die-${process.id}`}
+                                    >
+                                      <option value="">V Die…</option>
+                                      {toolingLib
+                                        .filter(t => t.tooling_type === 'v_die' && t.tooling_system === (processToolingSel[process.id] || {}).system)
+                                        .map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                                    </select>
+                                  </div>
                                   <Input
                                     value={process.tooling_required || ''}
                                     onChange={(e) => handleProcessChange(process.id, 'tooling_required', e.target.value)}
                                     placeholder="Punch: 11.049 (R8)  Die: V40"
+                                    data-testid={`quote-tooling-required-${process.id}`}
                                   />
-                                  <p className="text-xs text-gray-500 mt-1">Punch and die details</p>
+                                  <p className="text-xs text-gray-500 mt-1">Pick a machine&apos;s library then its punch &amp; die — or type manually. Manage lists on the Machines page.</p>
                                 </div>
                               </div>
                               

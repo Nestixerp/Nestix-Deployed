@@ -1086,3 +1086,9 @@ Machines now have a tooling_system field (None/Wila/Euro — select in Machines 
 
 ### Machine Workload View + Library renames (Jun 2026) — DONE ✅ (backend curl + UI screenshot verified)
 GET /api/job-sheets/machine-workload/summary — open (non-Completed/Cancelled) Press Brake job sheets grouped per press brake machine: count, total parts, est minutes (setup + bends + packing), sorted job list, plus "unassigned" bucket. UI: "Press Brake Workload" card on Machines page (components/MachineWorkload.js) with bars + expandable job lists; amber highlight for unassigned. Machine dropdowns in Generate Job Sheet dialogs (single + multi) now show "— N open jobs" per machine. Tooling library section labels renamed per user: "Willa Tool Library" (key Wila) and "Euro Style Tooling Library" (key Euro) — internal data keys unchanged. Needs redeploy.
+
+### Tooling On Quote + Library dropdowns (Jun 2026) — DONE ✅ (UI verified via screenshots)
+1. Quote Press Brake process form: "Tooling Required" now has 3 pickers — Library (Willa Tooling Library / Euro Style Tooling Library, labelled with the machines using each), Top Punch, V Die — composing "Punch: X  Die: Y" into the tooling_required field (still manually editable). State: toolingLib/toolingMachines/processToolingSel + updateToolingSel in Quotes.js.
+2. Completion dialog: added explicit "Tooling Library" dropdown (All/Willa/Euro Style) driving the Top Punch & V Die pick-lists; defaults to the job machine's tooling system. allTooling + toolingFor() in JobSheets.js. "+ Add new…" saves under the selected library.
+3. Labels standardised everywhere: "Willa Tooling Library" / "Euro Style Tooling Library" (internal keys Wila/Euro unchanged).
+Needs redeploy.
