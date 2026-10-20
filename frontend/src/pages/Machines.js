@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import { Cpu, Plus, Edit, Trash2, Search, AlertCircle } from 'lucide-react';
 import api from '../services/api';
+import { ToolingLibrary } from '../components/ToolingLibrary';
 
 const Machines = () => {
   const [machines, setMachines] = useState([]);
@@ -236,6 +237,9 @@ const Machines = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Press Brake Tooling Library */}
+      <ToolingLibrary />
 
       {/* Create Machine Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>

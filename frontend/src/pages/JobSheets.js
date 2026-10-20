@@ -13,6 +13,38 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { formatDate, formatDateTime } from '../utils/dateFormatter';
 
+const ToolingPicker = ({ label, options, value, onChange, testid, placeholder }) => {
+  const [custom, setCustom] = useState(false);
+  const inList = options.some(o => o.name === value);
+  return (
+    <div>
+      <Label>{label}</Label>
+      <select
+        className="flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm"
+        value={custom ? '__custom__' : (inList ? value : (value ? '__custom__' : ''))}
+        onChange={(e) => {
+          if (e.target.value === '__custom__') { setCustom(true); onChange(''); }
+          else { setCustom(false); onChange(e.target.value); }
+        }}
+        data-testid={`${testid}-select`}
+      >
+        <option value="">— Select —</option>
+        {options.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        <option value="__custom__">+ Add new…</option>
+      </select>
+      {(custom || (value && !inList)) && (
+        <Input
+          className="mt-1"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          data-testid={`${testid}-custom-input`}
+        />
+      )}
+    </div>
+  );
+};
+
 const JobSheets = () => {
   const { currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -45,6 +77,7 @@ const JobSheets = () => {
     top_punch_used: '',
     v_die_used: ''
   });
+  const [toolingOptions, setToolingOptions] = useState({ top_punch: [], v_die: [] });
   const [timeFromShopFloor, setTimeFromShopFloor] = useState(false); // Track if time was auto-populated
   
   // Packing Slip States
@@ -214,6 +247,15 @@ const JobSheets = () => {
   };
 
   const handleOpenCompleteDialog = async (jobSheet) => {
+    if (/press|brake|fold/i.test(jobSheet.process_name || '')) {
+      api.get('/tooling').then(r => {
+        const items = (r.data || []).filter(t => t.status === 'Active');
+        setToolingOptions({
+          top_punch: items.filter(t => t.tooling_type === 'top_punch'),
+          v_die: items.filter(t => t.tooling_type === 'v_die')
+        });
+      }).catch(() => {});
+    }
     setSelectedJobSheet(jobSheet);
     
     // Initialize with default values
@@ -358,6 +400,15 @@ const JobSheets = () => {
         top_punch_used: completionData.top_punch_used || null,
         v_die_used: completionData.v_die_used || null
       };
+      
+      // Grow the tooling library with any newly typed tooling
+      const saveNewTooling = (type, val, list) => {
+        if (val && !list.some(o => o.name.toLowerCase() === val.toLowerCase())) {
+          api.post('/tooling', { tooling_type: type, name: val }).catch(() => {});
+        }
+      };
+      saveNewTooling('top_punch', apiData.top_punch_used, toolingOptions.top_punch);
+      saveNewTooling('v_die', apiData.v_die_used, toolingOptions.v_die);
 
       const response = await api.post(`/job-sheets/${selectedJobSheet.id}/complete`, apiData);
       
@@ -1642,26 +1693,24 @@ const JobSheets = () => {
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-3" data-testid="pb-tooling-section">
                 <div className="font-semibold text-sm text-purple-900 mb-2">🔧 Press Brake Tooling Used</div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Top Punch Used</Label>
-                    <Input
-                      value={completionData.top_punch_used}
-                      onChange={(e) => setCompletionData({...completionData, top_punch_used: e.target.value})}
-                      placeholder="e.g. 11.049 (R8)"
-                      data-testid="top-punch-input"
-                    />
-                  </div>
-                  <div>
-                    <Label>V Die Used</Label>
-                    <Input
-                      value={completionData.v_die_used}
-                      onChange={(e) => setCompletionData({...completionData, v_die_used: e.target.value})}
-                      placeholder="e.g. V40"
-                      data-testid="v-die-input"
-                    />
-                  </div>
+                  <ToolingPicker
+                    label="Top Punch Used"
+                    options={toolingOptions.top_punch}
+                    value={completionData.top_punch_used}
+                    onChange={(v) => setCompletionData({...completionData, top_punch_used: v})}
+                    testid="top-punch"
+                    placeholder="e.g. 11.049 (R8)"
+                  />
+                  <ToolingPicker
+                    label="V Die Used"
+                    options={toolingOptions.v_die}
+                    value={completionData.v_die_used}
+                    onChange={(v) => setCompletionData({...completionData, v_die_used: v})}
+                    testid="v-die"
+                    placeholder="e.g. V40"
+                  />
                 </div>
-                <p className="text-xs text-purple-600 mt-1">Recorded so the next run of this part knows what tooling was used.</p>
+                <p className="text-xs text-purple-600 mt-1">Pick from the tooling library, or choose &quot;+ Add new…&quot; to type it — new tooling is saved to the library automatically. Manage the library on the Machines page.</p>
               </div>
             )}
             
