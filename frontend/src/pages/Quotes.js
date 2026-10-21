@@ -137,7 +137,6 @@ const Quotes = () => {
   };
   const [partHistory, setPartHistory] = useState([]);
   const [partHistoryOpen, setPartHistoryOpen] = useState(false);
-  const isPressBrakeProcess = (name) => /press|brake|fold/i.test(name || '');
   const loadPressBrakeMachines = async () => {
     try {
       const [mr, wr] = await Promise.all([
@@ -148,10 +147,19 @@ const Quotes = () => {
       (wr.data.machines || []).forEach(w => { counts[w.machine_id] = w.open_jobs; });
       setPressBrakeMachines(
         (mr.data || [])
-          .filter(m => /press/i.test(m.machine_type || '') && m.status === 'Active')
+          .filter(m => m.status === 'Active')
           .map(m => ({ ...m, open_jobs: counts[m.id] || 0 }))
       );
     } catch { setPressBrakeMachines([]); }
+  };
+  // Machines whose type/name matches the process (e.g. "Laser Cutting" -> Laser machines); all if no match
+  const machinesForProcess = (processName) => {
+    const words = (processName || '').toLowerCase().split(/[^a-z]+/).filter(w => w.length > 2);
+    const matches = pressBrakeMachines.filter(m => {
+      const hay = `${m.machine_type || ''} ${m.machine_name || ''}`.toLowerCase();
+      return words.some(w => hay.includes(w));
+    });
+    return matches.length ? matches : pressBrakeMachines;
   };
   const fetchPartHistoryFor = async (drawingNumber, partDescription, customerId) => {
     try {
@@ -3109,16 +3117,14 @@ const Quotes = () => {
     });
     setJobSheetDialogOpen(true);
     
-    // Press Brake: load machines + warn if this part was run before
-    if (isPressBrakeProcess(process?.name)) {
-      loadPressBrakeMachines();
-      fetchPartHistoryFor(quote.drawing_number, quote.part_description, quote.customer_id).then(entries => {
-        if (entries.length > 0) {
-          setPartHistory([{ part: quote.part_description, entries }]);
-          setPartHistoryOpen(true);
-        }
-      });
-    }
+    // Load machines + warn if this part was run before (any machine type)
+    loadPressBrakeMachines();
+    fetchPartHistoryFor(quote.drawing_number, quote.part_description, quote.customer_id).then(entries => {
+      if (entries.length > 0) {
+        setPartHistory([{ part: quote.part_description, entries }]);
+        setPartHistoryOpen(true);
+      }
+    });
   };
 
   const handleCreateJobSheet = async () => {
@@ -3197,11 +3203,11 @@ const Quotes = () => {
     });
     setMultiItemJobSheetDialogOpen(true);
     
-    // Press Brake: load machines + warn about previously-run parts
-    const pbLines = (quote.line_items || []).filter(li => (li.processes || []).some(p => isPressBrakeProcess(p.name)));
-    if (pbLines.length > 0) {
-      loadPressBrakeMachines();
-      Promise.all(pbLines.map(async (li) => ({
+    // Load machines + warn about previously-run parts (any machine type)
+    loadPressBrakeMachines();
+    const allLines = quote.line_items || [];
+    if (allLines.length > 0) {
+      Promise.all(allLines.map(async (li) => ({
         part: li.part_description,
         entries: await fetchPartHistoryFor(li.drawing_number, li.part_description, quote.customer_id)
       }))).then(groups => {
@@ -3246,8 +3252,7 @@ const Quotes = () => {
         if (lineItem.processes && lineItem.processes.length > 0) {
           for (const process of lineItem.processes) {
             try {
-              const isPB = isPressBrakeProcess(process.name);
-              const mId = isPB ? (override.machine_id || null) : null;
+              const mId = (override.machines || {})[process.id] || null;
               const jobSheetData = {
                 quote_id: selectedQuote.id,
                 line_item_id: lineItem.id,
@@ -6614,11 +6619,11 @@ const Quotes = () => {
               />
             </div>
 
-            {/* Press Brake Machine Selection */}
-            {isPressBrakeProcess(selectedProcess?.name) && (
+            {/* Machine Selection (any machine type) */}
+            {pressBrakeMachines.length > 0 && (
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-4" data-testid="js-machine-section">
                 <Label htmlFor="js_machine" className="text-base text-purple-900 font-semibold">
-                  🏭 Press Brake Machine
+                  🏭 Machine
                 </Label>
                 <select
                   id="js_machine"
@@ -6628,17 +6633,12 @@ const Quotes = () => {
                   onChange={(e) => setJobSheetFormData(prev => ({ ...prev, machine_id: e.target.value }))}
                 >
                   <option value="">— Select machine —</option>
-                  {pressBrakeMachines.map(m => (
+                  {machinesForProcess(selectedProcess?.name).map(m => (
                     <option key={m.id} value={m.id}>
                       {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''} — {m.open_jobs || 0} open job{(m.open_jobs || 0) === 1 ? '' : 's'}
                     </option>
                   ))}
                 </select>
-                {pressBrakeMachines.length === 0 && (
-                  <p className="text-xs text-purple-600 mt-1">
-                    No active Press Brake machines found — add them under Machines (type &quot;Press Brake&quot;).
-                  </p>
-                )}
                 <p className="text-xs text-purple-600 mt-1">The machine name will print bold on the job sheet. Open job counts help you balance workload.</p>
               </div>
             )}
@@ -6825,25 +6825,32 @@ const Quotes = () => {
                               {formatCurrency(jobTotalInc)}
                             </div>
                           </div>
-                          {item.processes?.some(p => isPressBrakeProcess(p.name)) && (
-                            <div className="col-span-3">
-                              <Label className="text-xs text-purple-900">🏭 Press Brake Machine</Label>
-                              <select
-                                data-testid={`multi-js-machine-${index}`}
-                                className="flex h-8 w-full rounded-md border border-purple-300 bg-white px-2 text-sm"
-                                value={override.machine_id || ''}
-                                onChange={(e) => setLineJobOverrides(prev => ({
-                                  ...prev,
-                                  [index]: { ...(prev[index] || {}), machine_id: e.target.value }
-                                }))}
-                              >
-                                <option value="">— Select machine —</option>
-                                {pressBrakeMachines.map(m => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''} — {m.open_jobs || 0} open job{(m.open_jobs || 0) === 1 ? '' : 's'}
-                                  </option>
-                                ))}
-                              </select>
+                          {(item.processes || []).length > 0 && (
+                            <div className="col-span-3 space-y-1">
+                              {(item.processes || []).map(p => (
+                                <div key={p.id} className="flex items-center gap-2">
+                                  <Label className="text-xs text-purple-900 w-44 shrink-0">🏭 {p.name} machine</Label>
+                                  <select
+                                    data-testid={`multi-js-machine-${index}-${p.id}`}
+                                    className="flex h-8 w-full rounded-md border border-purple-300 bg-white px-2 text-sm"
+                                    value={(override.machines || {})[p.id] || ''}
+                                    onChange={(e) => setLineJobOverrides(prev => ({
+                                      ...prev,
+                                      [index]: {
+                                        ...(prev[index] || {}),
+                                        machines: { ...((prev[index] || {}).machines || {}), [p.id]: e.target.value }
+                                      }
+                                    }))}
+                                  >
+                                    <option value="">— Select machine —</option>
+                                    {machinesForProcess(p.name).map(m => (
+                                      <option key={m.id} value={m.id}>
+                                        {m.machine_name}{m.machine_number ? ` (#${m.machine_number})` : ''} — {m.open_jobs || 0} open job{(m.open_jobs || 0) === 1 ? '' : 's'}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -6888,7 +6895,7 @@ const Quotes = () => {
           <DialogHeader>
             <DialogTitle>⚠️ This Part Has Been Run Before</DialogTitle>
             <DialogDescription>
-              Previous Press Brake job(s) found for this part — check which machine and tooling were used last time.
+              Previous job(s) found for this part — check which machine and tooling were used last time.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 max-h-[50vh] overflow-y-auto">
@@ -6899,6 +6906,7 @@ const Quotes = () => {
                   <thead className="bg-slate-100">
                     <tr>
                       <th className="text-left px-2 py-1 border">Job #</th>
+                      <th className="text-left px-2 py-1 border">Process</th>
                       <th className="text-left px-2 py-1 border">Machine Used</th>
                       <th className="text-left px-2 py-1 border">Top Punch</th>
                       <th className="text-left px-2 py-1 border">V Die</th>
@@ -6909,6 +6917,7 @@ const Quotes = () => {
                     {grp.entries.map((e, ei) => (
                       <tr key={ei} className="border-t">
                         <td className="px-2 py-1 border font-semibold">{e.job_sheet_number}</td>
+                        <td className="px-2 py-1 border">{e.process_name || '—'}</td>
                         <td className="px-2 py-1 border font-bold text-purple-800">{e.machine_name || '—'}</td>
                         <td className="px-2 py-1 border">{e.top_punch_used || '—'}</td>
                         <td className="px-2 py-1 border">{e.v_die_used || '—'}</td>

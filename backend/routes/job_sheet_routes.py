@@ -3,7 +3,6 @@ from typing import List, Optional
 from models import JobSheet, JobSheetCreate, JobSheetUpdate, JobSheetComplete
 from auth import get_current_user
 import os
-import re
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 
@@ -179,28 +178,31 @@ async def create_job_sheet(
         qa_inspection_items=quote.get('qa_inspection_items', [])  # Copy from quote
     )
     
-    # Press Brake repeat part: carry forward last-used tooling and previous production notes
-    if re.search(r'press|brake|fold', process.get('name') or '', re.I):
-        pb = {"process_name": {"$regex": "press|brake|fold", "$options": "i"}, "status": "Completed"}
-        hist = []
-        if quote.get('drawing_number'):
-            hist = await db.job_sheets.find({**pb, "drawing_number": quote['drawing_number']}, {"_id": 0}) \
-                .sort("created_at", -1).to_list(5)
-        if not hist and part_description:
-            hq = {**pb, "part_description": part_description}
-            if quote.get('customer_id'):
-                hq["customer_id"] = quote['customer_id']
-            hist = await db.job_sheets.find(hq, {"_id": 0}).sort("created_at", -1).to_list(5)
-        last_tooling = next((h for h in hist if h.get("top_punch_used") or h.get("v_die_used")), None)
-        if last_tooling:
-            job_sheet.last_run_job_number = last_tooling.get("job_sheet_number")
-            job_sheet.last_run_machine = last_tooling.get("machine_name")
-            job_sheet.last_used_top_punch = last_tooling.get("top_punch_used")
-            job_sheet.last_used_v_die = last_tooling.get("v_die_used")
-        notes = [f"[{h.get('job_sheet_number')}] {h.get('production_notes').strip()}"
-                 for h in hist[:3] if (h.get('production_notes') or '').strip()]
-        if notes:
-            job_sheet.previous_production_notes = "\n".join(notes)
+    # Repeat part (any machine/process): carry forward last run info and previous production notes
+    proc_name = process.get('name') or ''
+    hist_base = {"status": "Completed"}
+    if proc_name:
+        hist_base["process_name"] = proc_name
+    hist = []
+    if quote.get('drawing_number'):
+        hist = await db.job_sheets.find({**hist_base, "drawing_number": quote['drawing_number']}, {"_id": 0}) \
+            .sort("created_at", -1).to_list(5)
+    if not hist and part_description:
+        hq = {**hist_base, "part_description": part_description}
+        if quote.get('customer_id'):
+            hq["customer_id"] = quote['customer_id']
+        hist = await db.job_sheets.find(hq, {"_id": 0}).sort("created_at", -1).to_list(5)
+    last_run = next((h for h in hist if h.get("machine_name") or h.get("top_punch_used") or h.get("v_die_used")), None) \
+        or (hist[0] if hist else None)
+    if last_run:
+        job_sheet.last_run_job_number = last_run.get("job_sheet_number")
+        job_sheet.last_run_machine = last_run.get("machine_name")
+        job_sheet.last_used_top_punch = last_run.get("top_punch_used")
+        job_sheet.last_used_v_die = last_run.get("v_die_used")
+    notes = [f"[{h.get('job_sheet_number')}] {h.get('production_notes').strip()}"
+             for h in hist[:3] if (h.get('production_notes') or '').strip()]
+    if notes:
+        job_sheet.previous_production_notes = "\n".join(notes)
     
     # Prepare for MongoDB
     job_sheet_dict = job_sheet.dict()
@@ -218,13 +220,11 @@ async def get_all_job_sheets(current_user: dict = Depends(get_current_user)):
 
 @router.get("/job-sheets/machine-workload/summary")
 async def get_machine_workload(current_user: dict = Depends(get_current_user)):
-    """Open Press Brake jobs per machine, for balancing work when assigning."""
-    machines = await db.machines.find(
-        {"machine_type": {"$regex": "press", "$options": "i"}}, {"_id": 0}).to_list(100)
+    """Open jobs per machine — ALL machine types (Press Brake, Laser, Turret Punch, ...)."""
+    machines = await db.machines.find({}, {"_id": 0}).to_list(200)
     open_js = await db.job_sheets.find({
-        "status": {"$nin": ["Completed", "Cancelled"]},
-        "process_name": {"$regex": "press|brake|fold", "$options": "i"}
-    }, {"_id": 0}).to_list(1000)
+        "status": {"$nin": ["Completed", "Cancelled"]}
+    }, {"_id": 0}).to_list(2000)
 
     def est_minutes(js):
         qty = js.get("quantity") or 0
@@ -238,6 +238,7 @@ async def get_machine_workload(current_user: dict = Depends(get_current_user)):
             "job_sheet_number": j.get("job_sheet_number"),
             "part_description": j.get("part_description"),
             "customer_name": j.get("customer_name"),
+            "process_name": j.get("process_name"),
             "quantity": j.get("quantity"),
             "due_date": j.get("due_date"),
             "status": j.get("status"),
@@ -252,6 +253,7 @@ async def get_machine_workload(current_user: dict = Depends(get_current_user)):
         result.append({
             "machine_id": m["id"],
             "machine_name": m["machine_name"],
+            "machine_type": m.get("machine_type") or "Other",
             "machine_status": m.get("status"),
             "tooling_system": m.get("tooling_system"),
             "open_jobs": len(jobs),
@@ -277,22 +279,26 @@ async def get_part_history(
     drawing_number: Optional[str] = None,
     part_description: Optional[str] = None,
     customer_id: Optional[str] = None,
+    process_name: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Previous Press Brake job sheets for a part — drawing number first, fall back to part description."""
-    pb = {"process_name": {"$regex": "press|brake|fold", "$options": "i"}}
+    """Previous job sheets for a part (any machine type) — drawing number first, fall back to part description."""
+    base = {}
+    if process_name:
+        base["process_name"] = process_name
     results = []
     if drawing_number:
-        results = await db.job_sheets.find({**pb, "drawing_number": drawing_number}, {"_id": 0}) \
+        results = await db.job_sheets.find({**base, "drawing_number": drawing_number}, {"_id": 0}) \
             .sort("created_at", -1).to_list(10)
     if not results and part_description:
-        q = {**pb, "part_description": part_description}
+        q = {**base, "part_description": part_description}
         if customer_id:
             q["customer_id"] = customer_id
         results = await db.job_sheets.find(q, {"_id": 0}).sort("created_at", -1).to_list(10)
     return [{
         "job_sheet_number": r.get("job_sheet_number"),
         "machine_name": r.get("machine_name"),
+        "process_name": r.get("process_name"),
         "top_punch_used": r.get("top_punch_used"),
         "v_die_used": r.get("v_die_used"),
         "status": r.get("status"),

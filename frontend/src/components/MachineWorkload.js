@@ -21,6 +21,7 @@ const JobList = ({ jobs, machines, onAssign }) => (
       <tr className="text-slate-400 text-left">
         <th className="py-0.5 pr-2 font-medium">Job #</th>
         <th className="py-0.5 pr-2 font-medium">Part</th>
+        <th className="py-0.5 pr-2 font-medium">Process</th>
         <th className="py-0.5 pr-2 font-medium">Qty</th>
         <th className="py-0.5 pr-2 font-medium">Due</th>
         <th className="py-0.5 pr-2 font-medium">Status</th>
@@ -31,7 +32,8 @@ const JobList = ({ jobs, machines, onAssign }) => (
       {jobs.map((j, i) => (
         <tr key={i} className="border-t">
           <td className="py-1 pr-2 font-semibold">{j.job_sheet_number}</td>
-          <td className="py-1 pr-2 truncate max-w-[220px]">{j.part_description}</td>
+          <td className="py-1 pr-2 truncate max-w-[200px]">{j.part_description}</td>
+          <td className="py-1 pr-2">{j.process_name || '—'}</td>
           <td className="py-1 pr-2">{j.quantity}</td>
           <td className="py-1 pr-2">{fmtDue(j.due_date)}</td>
           <td className="py-1 pr-2"><Badge variant="outline" className="text-[10px]">{j.status}</Badge></td>
@@ -45,7 +47,9 @@ const JobList = ({ jobs, machines, onAssign }) => (
               >
                 <option value="">Select machine…</option>
                 {machines.map(m => (
-                  <option key={m.id} value={m.id}>{m.machine_name}</option>
+                  <option key={m.id} value={m.id}>
+                    {m.machine_name}{m.machine_type ? ` (${m.machine_type})` : ''}
+                  </option>
                 ))}
               </select>
             </td>
@@ -96,7 +100,7 @@ export const MachineWorkload = () => {
   useEffect(() => {
     load();
     api.get('/machines').then(r =>
-      setMachines((r.data || []).filter(m => /press/i.test(m.machine_type || '') && m.status === 'Active'))
+      setMachines((r.data || []).filter(m => m.status === 'Active'))
     ).catch(() => {});
   }, []);
 
@@ -113,24 +117,43 @@ export const MachineWorkload = () => {
   if (!workload) return null;
   const maxJobs = Math.max(1, ...workload.machines.map(m => m.open_jobs), workload.unassigned.open_jobs);
 
+  // Group machines by type: "Press Brake Workload", "Laser Workload", ...
+  const groups = [];
+  workload.machines.forEach(m => {
+    const type = m.machine_type || 'Other';
+    let g = groups.find(x => x.type === type);
+    if (!g) { g = { type, machines: [] }; groups.push(g); }
+    g.machines.push(m);
+  });
+
   return (
     <Card data-testid="machine-workload-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Gauge className="h-4 w-4" /> Press Brake Workload
+          <Gauge className="h-4 w-4" /> Machine Workload
         </CardTitle>
         <p className="text-xs text-slate-500">Open jobs per machine — assign unassigned jobs to a machine directly from here.</p>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {workload.machines.map(m => (
-          <MachineBlock key={m.machine_id}
-            title={m.machine_name}
-            badge={[m.tooling_system, m.machine_status !== 'Active' ? m.machine_status : null].filter(Boolean).join(' · ')}
-            data={m} maxJobs={maxJobs} />
+      <CardContent className="space-y-5">
+        {groups.map(g => (
+          <div key={g.type} data-testid={`workload-group-${g.type.replace(/\s+/g, '-')}`}>
+            <h3 className="font-semibold text-sm text-slate-800 mb-2">{g.type} Workload</h3>
+            <div className="space-y-3">
+              {g.machines.map(m => (
+                <MachineBlock key={m.machine_id}
+                  title={m.machine_name}
+                  badge={[m.tooling_system, m.machine_status !== 'Active' ? m.machine_status : null].filter(Boolean).join(' · ')}
+                  data={m} maxJobs={maxJobs} />
+              ))}
+            </div>
+          </div>
         ))}
         {workload.unassigned.open_jobs > 0 && (
-          <MachineBlock title="Not assigned to a machine" data={workload.unassigned} maxJobs={maxJobs}
-            highlight machines={machines} onAssign={assignJob} />
+          <div>
+            <h3 className="font-semibold text-sm text-amber-700 mb-2">Unassigned Jobs</h3>
+            <MachineBlock title="Not assigned to a machine" data={workload.unassigned} maxJobs={maxJobs}
+              highlight machines={machines} onAssign={assignJob} />
+          </div>
         )}
       </CardContent>
     </Card>
